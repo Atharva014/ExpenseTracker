@@ -6,13 +6,20 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData } from '../utils/storage';
+import { getTheme, subscribeToTheme } from '../utils/theme';
 
 const ReportsScreen = () => {
   const [data, setData] = useState(null);
+  const [theme, setThemeState] = useState(getTheme());
 
   useEffect(() => {
     loadAppData();
+    const unsubscribe = subscribeToTheme(() => {
+      setThemeState(getTheme());
+    });
+    return unsubscribe;
   }, []);
 
   const loadAppData = async () => {
@@ -41,102 +48,113 @@ const ReportsScreen = () => {
     return Object.values(totals);
   };
 
+  const styles = createStyles(theme);
+
   if (!data) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Reports</Text>
-        <Text style={styles.subtitle}>Your spending insights</Text>
-      </View>
-
-      <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Monthly Spending</Text>
-        <View style={styles.chartPlaceholder}>
-          <Text style={styles.placeholderText}>Chart will be displayed here</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Reports</Text>
+          <Text style={styles.subtitle}>Your spending insights</Text>
         </View>
-      </View>
 
-      <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>
-        Category Breakdown
-      </Text>
-      
-      <View style={styles.categoriesGrid}>
-        {getCategoryTotals().map((category, index) => (
-          <View key={index} style={styles.categoryCard}>
-            <View style={styles.categoryIcon}>
-              <Text style={styles.categoryIconText}>{category.icon}</Text>
-            </View>
-            <Text style={styles.categoryName}>{category.name}</Text>
-            <Text style={styles.categoryAmount}>
-              ₹{category.total.toFixed(2)}
-            </Text>
+        <View style={styles.chartContainer}>
+          <Text style={styles.sectionTitle}>Monthly Spending</Text>
+          <View style={styles.chartPlaceholder}>
+            <Text style={styles.placeholderText}>Chart will be displayed here</Text>
           </View>
-        ))}
-      </View>
-    </ScrollView>
+        </View>
+
+        <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>
+          Category Breakdown
+        </Text>
+        
+        <View style={styles.categoriesGrid}>
+          {getCategoryTotals().map((category, index) => (
+            <View key={index} style={styles.categoryCard}>
+              <View style={styles.categoryIcon}>
+                <Text style={styles.categoryIconText}>{category.icon}</Text>
+              </View>
+              <Text style={styles.categoryName}>{category.name}</Text>
+              <Text style={styles.categoryAmount}>
+                ₹{category.total.toFixed(2)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme) => StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.bgPrimary,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgPrimary,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
   loadingText: {
     fontSize: 18,
-    color: '#6B7280',
+    color: theme.textSecondary,
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: theme.textGreeting,
   },
   chartContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgCard,
     marginHorizontal: 20,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
     marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 15,
   },
   chartPlaceholder: {
     height: 150,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.bgSecondary,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   placeholderText: {
-    color: '#6B7280',
+    color: theme.textSecondary,
     fontSize: 14,
   },
   categoriesGrid: {
@@ -144,22 +162,22 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 20,
     gap: 10,
-    paddingBottom: 100,
+    paddingBottom: 50,
   },
   categoryCard: {
     width: (Dimensions.get('window').width - 50) / 2,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgCard,
     padding: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
     alignItems: 'center',
   },
   categoryIcon: {
     width: 50,
     height: 50,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.bgSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -170,13 +188,13 @@ const styles = StyleSheet.create({
   categoryName: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 5,
   },
   categoryAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
   },
 });
 

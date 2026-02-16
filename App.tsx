@@ -1,44 +1,43 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import AppNavigator from './src/navigation/AppNavigator';
+import { loadTheme } from './src/utils/theme';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+const App = () => {
+  const [isReady, setIsReady] = useState(false);
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Load theme
+        await loadTheme();
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setIsReady(true);
+      }
+    }
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
-}
+    prepare();
+  }, []);
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+  if (!isReady) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#000000" />
+      </View>
+    );
+  }
 
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
+  return <AppNavigator />;
+};
 
 const styles = StyleSheet.create({
-  container: {
+  loading: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
 });
 

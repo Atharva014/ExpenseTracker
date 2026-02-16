@@ -1,35 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData } from '../utils/storage';
-import { authenticateWithBiometric } from '../utils/auth';
+import { getTheme, subscribeToTheme } from '../utils/theme';
+import { useFocusEffect } from '@react-navigation/native';
 
+const [userName, setUserName] = useState('Amandal');
 const HomeScreen = ({ navigation }) => {
   const [data, setData] = useState(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [showIncome, setShowIncome] = useState(false);
+  const [showBalance, setShowBalance] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [theme, setThemeState] = useState(getTheme());
 
   useEffect(() => {
     loadAppData();
+    loadUserName();
+    const unsubscribe = subscribeToTheme((newTheme) => {
+      setThemeState(getTheme());
+    });
+    return unsubscribe;
   }, []);
+
+  // Reload data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadAppData();
+    }, [])
+  );
+
+  const loadUserName = async () => {
+    try {
+      const name = await AsyncStorage.getItem('userName');
+      if (name) setUserName(name);
+    } catch (error) {
+      console.error('Error loading user name:', error);
+    }
+  };
 
   const loadAppData = async () => {
     const appData = await loadData();
     setData(appData);
   };
 
-  const handleUnlock = async () => {
-    const authenticated = await authenticateWithBiometric();
-    if (authenticated) {
-      setIsUnlocked(true);
-    } else {
-      Alert.alert('Authentication Failed', 'Please try again');
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAppData();
+    setRefreshing(false);
   };
 
   const calculateTotalExpense = () => {
@@ -38,8 +63,7 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const calculateTotalIncome = () => {
-    // This will be calculated from income entries in future
-    return 65000; // Placeholder
+    return 65000;
   };
 
   const getCurrentBalance = () => {
@@ -51,110 +75,140 @@ const HomeScreen = ({ navigation }) => {
     return data.expenses.slice(0, 5);
   };
 
+  const styles = createStyles(theme);
+
   if (!data) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Good morning, Amandal</Text>
-        <Text style={styles.subGreeting}>Your expenses</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Hi, {userName}</Text>
+        </View>
 
-      {/* Total Expense Card */}
-      <View style={styles.totalExpenseCard}>
-        <Text style={styles.cardLabel}>TOTAL EXPENSE</Text>
-        <Text style={styles.totalAmount}>
-          {isUnlocked ? `₹${calculateTotalExpense().toFixed(2)}` : '******'}
-        </Text>
-      </View>
-
-      {/* Stats Grid */}
-      <View style={styles.statsGrid}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>TOTAL INCOME</Text>
-          <Text style={styles.statAmount}>
-            {isUnlocked ? `₹${calculateTotalIncome().toFixed(2)}` : '******'}
+        {/* Total Expense - Always Visible */}
+        <View style={styles.totalExpenseCard}>
+          <Text style={styles.cardLabel}>TOTAL EXPENSE</Text>
+          <Text style={styles.totalAmount}>
+            ₹{calculateTotalExpense().toFixed(2)}
           </Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>CURRENT BALANCE</Text>
-          <Text style={styles.statAmount}>
-            {isUnlocked ? `₹${getCurrentBalance().toFixed(2)}` : '******'}
-          </Text>
-        </View>
-      </View>
 
-      {!isUnlocked && (
-        <TouchableOpacity style={styles.unlockButton} onPress={handleUnlock}>
-          <Text style={styles.unlockText}>🔓 Tap to Unlock</Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Recent Activity */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>See all</Text>
-        </TouchableOpacity>
-      </View>
-
-      {getRecentExpenses().map((expense) => (
-        <View key={expense.id} style={styles.transactionItem}>
-          <View style={styles.transactionIcon}>
-            <Text style={styles.iconText}>
-              {data.categories.find(c => c.id === expense.categoryId)?.icon || '📦'}
+        {/* Stats Grid - Click to Show/Hide */}
+        <View style={styles.statsGrid}>
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => setShowIncome(!showIncome)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>TOTAL INCOME</Text>
+            <Text style={styles.statAmount}>
+              {showIncome ? `₹${calculateTotalIncome().toFixed(2)}` : '******'}
             </Text>
-          </View>
-          <View style={styles.transactionDetails}>
-            <Text style={styles.transactionTitle}>{expense.description}</Text>
-            <Text style={styles.transactionSubtitle}>
-              {new Date(expense.date).toLocaleDateString()} • {expense.paymentMethod}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.statCard}
+            onPress={() => setShowBalance(!showBalance)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>CURRENT BALANCE</Text>
+            <Text style={styles.statAmount}>
+              {showBalance ? `₹${getCurrentBalance().toFixed(2)}` : '******'}
             </Text>
-          </View>
-          <Text style={styles.transactionAmount}>-₹{expense.amount}</Text>
+          </TouchableOpacity>
         </View>
-      ))}
-    </ScrollView>
+
+        {/* Recent Activity */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('History')}>
+            <Text style={styles.seeAll}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {getRecentExpenses().length > 0 ? (
+          <View style={styles.transactionsContainer}>
+            {getRecentExpenses().map((expense) => (
+              <View key={expense.id} style={styles.transactionCard}>
+                <View style={styles.transactionItem}>
+                  <View style={styles.transactionIcon}>
+                    <Text style={styles.iconText}>
+                      {data.categories.find(c => c.id === expense.categoryId)?.icon || '📦'}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionTitle}>{expense.description}</Text>
+                    <Text style={styles.transactionSubtitle}>
+                      {new Date(expense.date).toLocaleDateString()} • {expense.paymentMethod}
+                    </Text>
+                  </View>
+                  <Text style={styles.transactionAmount}>-₹{expense.amount}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No transactions yet</Text>
+            <Text style={styles.emptyStateSubtext}>Add your first expense to get started</Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme) => StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.bgPrimary,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgPrimary,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
   },
   loadingText: {
     fontSize: 18,
-    color: '#6B7280',
+    color: theme.textSecondary,
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   greeting: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   subGreeting: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: theme.textGreeting,
   },
   totalExpenseCard: {
-    backgroundColor: '#000000',
+    backgroundColor: theme.cardBg,
     marginHorizontal: 20,
     borderRadius: 16,
     padding: 20,
@@ -162,7 +216,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 11,
-    color: '#FFFFFF',
+    color: theme.cardText,
     opacity: 0.9,
     marginBottom: 8,
     letterSpacing: 0.5,
@@ -170,7 +224,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: theme.cardText,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -180,35 +234,22 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgCard,
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
   },
   statLabel: {
     fontSize: 11,
-    color: '#6B7280',
+    color: theme.textSecondary,
     marginBottom: 10,
     letterSpacing: 0.5,
   },
   statAmount: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  unlockButton: {
-    marginHorizontal: 20,
-    backgroundColor: '#F3F4F6',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  unlockText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -221,29 +262,34 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
   },
   seeAll: {
     fontSize: 12,
-    color: '#6B7280',
+    color: theme.textSecondary,
     fontWeight: '600',
+  },
+  transactionsContainer: {
+    paddingHorizontal: 20,
+  },
+  transactionCard: {
+    backgroundColor: theme.bgCard,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    overflow: 'hidden',
   },
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 20,
     padding: 14,
-    borderRadius: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   transactionIcon: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.bgSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -257,17 +303,33 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   transactionSubtitle: {
     fontSize: 11,
-    color: '#6B7280',
+    color: theme.textSecondary,
   },
   transactionAmount: {
     fontSize: 15,
     fontWeight: '700',
     color: '#EF4444',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textAlign: 'center',
   },
 });
 

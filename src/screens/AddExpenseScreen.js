@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { addExpense, loadData } from '../utils/storage';
+import { getTheme, subscribeToTheme } from '../utils/theme';
 
 const AddExpenseScreen = ({ navigation }) => {
   const [amount, setAmount] = useState('');
@@ -20,9 +22,14 @@ const AddExpenseScreen = ({ navigation }) => {
   
   const [categories, setCategories] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [theme, setThemeState] = useState(getTheme());
 
   useEffect(() => {
     loadOptions();
+    const unsubscribe = subscribeToTheme(() => {
+      setThemeState(getTheme());
+    });
+    return unsubscribe;
   }, []);
 
   const loadOptions = async () => {
@@ -67,104 +74,123 @@ const AddExpenseScreen = ({ navigation }) => {
     }
   };
 
+  const styles = createStyles(theme);
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Add Expense</Text>
-        <Text style={styles.subtitle}>Record your spending</Text>
-      </View>
-
-      <View style={styles.form}>
-        <Text style={styles.label}>Amount</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="₹0.00"
-          keyboardType="numeric"
-          value={amount}
-          onChangeText={setAmount}
-        />
-
-        <Text style={styles.label}>Category</Text>
-        <View style={styles.optionsGrid}>
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              style={[
-                styles.optionChip,
-                categoryId === cat.id && styles.optionChipSelected,
-              ]}
-              onPress={() => setCategoryId(cat.id)}>
-              <Text style={styles.optionIcon}>{cat.icon}</Text>
-              <Text style={styles.optionText}>{cat.name}</Text>
-            </TouchableOpacity>
-          ))}
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Add Expense</Text>
+          <Text style={styles.subtitle}>Record your spending</Text>
         </View>
 
-        <Text style={styles.label}>Payment Method</Text>
-        <View style={styles.optionsGrid}>
-          {paymentMethods.map((method) => (
-            <TouchableOpacity
-              key={method.id}
-              style={[
-                styles.optionChip,
-                paymentMethod === method.name && styles.optionChipSelected,
-              ]}
-              onPress={() => setPaymentMethod(method.name)}>
-              <Text style={styles.optionIcon}>{method.icon}</Text>
-              <Text style={styles.optionText}>{method.name}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.form}>
+          <Text style={styles.label}>Amount</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="₹0.00"
+            placeholderTextColor={theme.textSecondary}
+            keyboardType="numeric"
+            value={amount}
+            onChangeText={setAmount}
+          />
+
+          <Text style={styles.label}>Category</Text>
+          <View style={styles.optionsGrid}>
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.optionChip,
+                  categoryId === cat.id && styles.optionChipSelected,
+                ]}
+                onPress={() => setCategoryId(cat.id)}>
+                <Text style={styles.optionIcon}>{cat.icon}</Text>
+                <Text style={[
+                  styles.optionText,
+                  categoryId === cat.id && styles.optionTextSelected
+                ]}>{cat.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Payment Method</Text>
+          <View style={styles.optionsGrid}>
+            {paymentMethods.map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.optionChip,
+                  paymentMethod === method.name && styles.optionChipSelected,
+                ]}
+                onPress={() => setPaymentMethod(method.name)}>
+                <Text style={styles.optionIcon}>{method.icon}</Text>
+                <Text style={[
+                  styles.optionText,
+                  paymentMethod === method.name && styles.optionTextSelected
+                ]}>{method.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="What did you buy?"
+            placeholderTextColor={theme.textSecondary}
+            value={description}
+            onChangeText={setDescription}
+          />
+
+          <Text style={styles.label}>Location (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Where?"
+            placeholderTextColor={theme.textSecondary}
+            value={location}
+            onChangeText={setLocation}
+          />
+
+          <Text style={styles.label}>Date</Text>
+          <TextInput
+            style={styles.input}
+            value={date}
+            onChangeText={setDate}
+          />
+
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+            <Text style={styles.saveButtonText}>Save Expense</Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="What did you buy?"
-          value={description}
-          onChangeText={setDescription}
-        />
-
-        <Text style={styles.label}>Location (Optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Where?"
-          value={location}
-          onChangeText={setLocation}
-        />
-
-        <Text style={styles.label}>Date</Text>
-        <TextInput
-          style={styles.input}
-          value={date}
-          onChangeText={setDate}
-        />
-
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Expense</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme) => StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.bgPrimary,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgPrimary,
+  },
+  scrollContent: {
+    paddingBottom: 120,
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: theme.textGreeting,
   },
   form: {
     padding: 20,
@@ -172,18 +198,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 8,
     marginTop: 16,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
     borderRadius: 12,
     padding: 14,
     fontSize: 14,
-    color: '#1A1A1A',
-    backgroundColor: '#FFFFFF',
+    color: theme.textPrimary,
+    backgroundColor: theme.bgCard,
   },
   optionsGrid: {
     flexDirection: 'row',
@@ -197,12 +223,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    borderColor: theme.border,
+    backgroundColor: theme.bgSecondary,
   },
   optionChipSelected: {
-    backgroundColor: '#000000',
-    borderColor: '#000000',
+    backgroundColor: theme.cardBg,
+    borderColor: theme.cardBg,
   },
   optionIcon: {
     fontSize: 16,
@@ -211,18 +237,21 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
+  },
+  optionTextSelected: {
+    color: theme.cardText,
   },
   saveButton: {
-    backgroundColor: '#000000',
+    backgroundColor: theme.cardBg,
     padding: 16,
     borderRadius: 14,
     alignItems: 'center',
     marginTop: 30,
-    marginBottom: 100,
+    marginBottom: 50,
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: theme.cardText,
     fontSize: 14,
     fontWeight: '700',
   },

@@ -8,15 +8,22 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData, addPaymentMethod } from '../utils/storage';
+import { getTheme, subscribeToTheme } from '../utils/theme';
 
 const PaymentMethodsScreen = () => {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMethodName, setNewMethodName] = useState('');
+  const [theme, setThemeState] = useState(getTheme());
 
   useEffect(() => {
     loadPaymentMethods();
+    const unsubscribe = subscribeToTheme(() => {
+      setThemeState(getTheme());
+    });
+    return unsubscribe;
   }, []);
 
   const loadPaymentMethods = async () => {
@@ -48,67 +55,78 @@ const PaymentMethodsScreen = () => {
     }
   };
 
+  const styles = createStyles(theme);
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Payment Methods</Text>
-        <Text style={styles.subtitle}>Manage your cards & accounts</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Payment Methods</Text>
+          <Text style={styles.subtitle}>Manage your cards & accounts</Text>
+        </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Your Payment Methods</Text>
-        <TouchableOpacity onPress={() => setShowAddForm(!showAddForm)}>
-          <Text style={styles.addButton}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
-
-      {showAddForm && (
-        <View style={styles.addForm}>
-          <TextInput
-            style={styles.input}
-            placeholder="Payment method name"
-            value={newMethodName}
-            onChangeText={setNewMethodName}
-          />
-          <TouchableOpacity style={styles.saveButton} onPress={handleAddMethod}>
-            <Text style={styles.saveButtonText}>Save</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your Payment Methods</Text>
+          <TouchableOpacity onPress={() => setShowAddForm(!showAddForm)}>
+            <Text style={styles.addButton}>+ Add</Text>
           </TouchableOpacity>
         </View>
-      )}
 
-      {paymentMethods.map((method) => (
-        <View key={method.id} style={styles.methodCard}>
-          <View style={styles.methodIcon}>
-            <Text style={styles.iconText}>{method.icon}</Text>
+        {showAddForm && (
+          <View style={styles.addForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="Payment method name"
+              placeholderTextColor={theme.textSecondary}
+              value={newMethodName}
+              onChangeText={setNewMethodName}
+            />
+            <TouchableOpacity style={styles.saveButton} onPress={handleAddMethod}>
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.methodInfo}>
-            <Text style={styles.methodName}>{method.name}</Text>
-            <Text style={styles.methodType}>{method.type}</Text>
+        )}
+
+        {paymentMethods.map((method) => (
+          <View key={method.id} style={styles.methodCard}>
+            <View style={styles.methodIcon}>
+              <Text style={styles.iconText}>{method.icon}</Text>
+            </View>
+            <View style={styles.methodInfo}>
+              <Text style={styles.methodName}>{method.name}</Text>
+              <Text style={styles.methodType}>{method.type}</Text>
+            </View>
           </View>
-        </View>
-      ))}
-    </ScrollView>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme) => StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: theme.bgPrimary,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgPrimary,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   header: {
     padding: 20,
-    paddingTop: 60,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   subtitle: {
     fontSize: 13,
-    color: '#9CA3AF',
+    color: theme.textGreeting,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -120,36 +138,37 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
   },
   addButton: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
   },
   addForm: {
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 15,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: theme.bgSecondary,
     borderRadius: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgCard,
+    color: theme.textPrimary,
   },
   saveButton: {
-    backgroundColor: '#000000',
+    backgroundColor: theme.cardBg,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: theme.cardText,
     fontWeight: '600',
   },
   methodCard: {
@@ -157,17 +176,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 20,
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.bgCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: theme.border,
     marginBottom: 12,
   },
   methodIcon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: theme.bgSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -181,12 +200,12 @@ const styles = StyleSheet.create({
   methodName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: theme.textPrimary,
     marginBottom: 3,
   },
   methodType: {
     fontSize: 12,
-    color: '#6B7280',
+    color: theme.textSecondary,
   },
 });
 
