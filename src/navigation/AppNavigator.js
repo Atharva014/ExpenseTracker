@@ -1,37 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import HomeScreen from '../screens/HomeScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import HistoryScreen from '../screens/HistoryScreen';
 import ReportsScreen from '../screens/ReportsScreen';
-import PaymentMethodsScreen from '../screens/PaymentMethodsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import { getTheme, subscribeToTheme } from '../utils/theme';
 
 const Tab = createBottomTabNavigator();
 
-const defaultTheme = {
-  navBg: '#FFFFFF',
-  activeTabIndicator: '#000000',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6B7280',
-};
+// Extra bottom padding to sit above Android gesture navigation bar
+const GESTURE_NAV_HEIGHT = Platform.OS === 'android' ? 34 : 0;
 
 const AppNavigator = () => {
-  const [theme, setTheme] = useState(defaultTheme);
+  const [theme, setTheme] = useState(getTheme());
 
   useEffect(() => {
-    import('../utils/theme').then((themeModule) => {
-      setTheme(themeModule.getTheme());
-      
-      const unsubscribe = themeModule.subscribeToTheme(() => {
-        setTheme(themeModule.getTheme());
-      });
-      
-      return () => unsubscribe();
-    });
+    const unsubscribe = subscribeToTheme(() => setTheme(getTheme()));
+    return unsubscribe;
   }, []);
+
+  const getTabIcon = (focusedName, unfocusedName, focused, color) => (
+    <View style={styles.iconContainer}>
+      {focused && (
+        <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />
+      )}
+      <Ionicons
+        name={focused ? focusedName : unfocusedName}
+        size={24}
+        color={color}
+      />
+    </View>
+  );
 
   return (
     <NavigationContainer>
@@ -39,100 +42,72 @@ const AppNavigator = () => {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            height: 80,
-            paddingBottom: 20,
+            height: 60 + GESTURE_NAV_HEIGHT,
+            paddingBottom: GESTURE_NAV_HEIGHT + 6,
             paddingTop: 8,
-            borderTopWidth: 0,
+            borderTopWidth: 1,
+            borderTopColor: theme.navBorder,
             backgroundColor: theme.navBg,
-            elevation: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
+            elevation: 0,
+            shadowOpacity: 0,
           },
           tabBarActiveTintColor: theme.textPrimary,
-          tabBarInactiveTintColor: theme.textSecondary,
+          tabBarInactiveTintColor: theme.textMuted,
           tabBarLabelStyle: {
             fontSize: 10,
             fontWeight: '600',
+            letterSpacing: 0.2,
+            marginTop: 2,
           },
-        }}>
+        }}
+      >
         <Tab.Screen
           name="Home"
           component={HomeScreen}
           options={{
             tabBarLabel: 'Home',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>🏠</Text>
-              </View>
-            ),
+            tabBarIcon: ({ focused, color }) =>
+              getTabIcon('home', 'home-outline', focused, color),
           }}
         />
+
         <Tab.Screen
           name="Expense"
           component={AddExpenseScreen}
           options={{
-            tabBarLabel: 'Expense',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>➕</Text>
-              </View>
-            ),
+            tabBarLabel: 'Add',
+            tabBarIcon: ({ focused, color }) =>
+              getTabIcon('add-circle', 'add-circle-outline', focused, color),
           }}
         />
+
         <Tab.Screen
           name="History"
           component={HistoryScreen}
           options={{
             tabBarLabel: 'History',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>📜</Text>
-              </View>
-            ),
+            tabBarIcon: ({ focused, color }) =>
+              getTabIcon('time', 'time-outline', focused, color),
           }}
         />
+
         <Tab.Screen
           name="Reports"
           component={ReportsScreen}
           options={{
             tabBarLabel: 'Reports',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>📊</Text>
-              </View>
-            ),
+            tabBarIcon: ({ focused, color }) =>
+              getTabIcon('bar-chart', 'bar-chart-outline', focused, color),
           }}
         />
-        <Tab.Screen
-          name="Cards"
-          component={PaymentMethodsScreen}
-          options={{
-            tabBarLabel: 'Cards',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>💳</Text>
-              </View>
-            ),
-          }}
-        />
+
         <Tab.Screen
           name="Account"
           component={SettingsScreen}
           options={{
             tabBarLabel: 'Account',
-            tabBarIcon: ({ focused }) => (
-              <View style={styles.iconContainer}>
-                {focused && <View style={[styles.activeIndicator, { backgroundColor: theme.activeTabIndicator }]} />}
-                <Text style={{ fontSize: 24 }}>👤</Text>
-              </View>
-            ),
+            tabBarIcon: ({ focused, color }) =>
+              getTabIcon('person', 'person-outline', focused, color),
           }}
         />
       </Tab.Navigator>
@@ -144,11 +119,13 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 36,
+    height: 28,
   },
   activeIndicator: {
     position: 'absolute',
     top: -8,
-    width: 30,
+    width: 28,
     height: 3,
     borderRadius: 2,
   },
