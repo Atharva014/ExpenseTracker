@@ -165,11 +165,11 @@ const SettingsScreen = ({ navigation }) => {
     {
       title: 'YOUR ACCOUNT',
       items: [
-        { icon: '👤', label: 'My Profile', subtitle: `${userName} • ${userEmail}`, onPress: openEditModal },
+        { icon: '👤', label: 'My Profile', subtitle: userName, onPress: openEditModal },
         { 
           icon: '💳', 
           label: 'Payment Methods', 
-          subtitle: 'Manage cards & cash', 
+          subtitle: 'Manage banks and cards', 
           isExpandable: true,
           expanded: paymentMethodsExpanded,
           onPress: () => setPaymentMethodsExpanded(!paymentMethodsExpanded),
@@ -210,111 +210,116 @@ const SettingsScreen = ({ navigation }) => {
             <Text style={styles.sectionTitle}>{section.title}</Text>
             {section.items.map((item, iIdx) => (
               <View key={iIdx}>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={item.onPress}
-                  activeOpacity={item.isSwitch ? 1 : 0.7}
-                  disabled={!item.onPress && !item.isSwitch}
-                >
-                  <View style={styles.menuItemLeft}>
-                    <View style={styles.iconBox}>
-                      <Text style={styles.menuItemIcon}>{item.icon}</Text>
-                    </View>
-                    <View style={styles.menuItemTextWrap}>
-                      <Text style={styles.menuItemText}>{item.label}</Text>
-                      {item.subtitle && (
-                        <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.menuItemRight}>
-                    {item.badge && (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{item.badge}</Text>
+                <View style={[
+                  styles.menuItem,
+                  item.isExpandable && item.expanded && styles.menuItemExpanded
+                ]}>
+                  <TouchableOpacity
+                    style={styles.menuItemClickable}
+                    onPress={item.onPress}
+                    activeOpacity={item.isSwitch ? 1 : 0.7}
+                    disabled={!item.onPress && !item.isSwitch}
+                  >
+                    <View style={styles.menuItemLeft}>
+                      <View style={styles.iconBox}>
+                        <Text style={styles.menuItemIcon}>{item.icon}</Text>
                       </View>
-                    )}
-                    {item.rightText && (
-                      <Text style={styles.rightText}>{item.rightText}</Text>
-                    )}
-                    {item.isSwitch ? (
-                      <Switch
-                        value={item.value}
-                        onValueChange={item.onToggle}
-                        trackColor={{ false: theme.bgElevated, true: theme.green }}
-                        thumbColor={'#FFFFFF'}
-                        style={{ marginLeft: 8 }}
-                      />
-                    ) : item.isExpandable ? (
-                      item.expanded ? <ChevronDownIcon color={theme.textMuted} /> : <ChevronIcon color={theme.textMuted} />
-                    ) : item.onPress ? (
-                      <ChevronIcon color={theme.textMuted} />
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
+                      <View style={styles.menuItemTextWrap}>
+                        <Text style={styles.menuItemText}>{item.label}</Text>
+                        {item.subtitle && (
+                          <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
+                        )}
+                      </View>
+                    </View>
 
-                {/* Expanded Payment Methods Cards */}
-                {item.isExpandable && item.expanded && (
-                  <View style={styles.expandedSection}>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.cardsScrollContent}
-                    >
-                      {/* Existing Payment Methods */}
-                      {paymentMethods.map((method) => {
-                        const isCard = method.type === 'card' || method.type === 'cash';
-                        const isCash = method.name?.toLowerCase() === 'cash';
-                        const cardColor = isCash ? '#10B981' : isCard ? '#EF4444' : '#4A90E2';
+                    <View style={styles.menuItemRight}>
+                      {item.badge && (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{item.badge}</Text>
+                        </View>
+                      )}
+                      {item.rightText && (
+                        <Text style={styles.rightText}>{item.rightText}</Text>
+                      )}
+                      {item.isSwitch ? (
+                        <Switch
+                          value={item.value}
+                          onValueChange={item.onToggle}
+                          trackColor={{ false: theme.bgElevated, true: theme.green }}
+                          thumbColor={'#FFFFFF'}
+                          style={{ marginLeft: 8 }}
+                        />
+                      ) : item.isExpandable ? (
+                        item.expanded ? <ChevronDownIcon color={theme.textMuted} /> : <ChevronIcon color={theme.textMuted} />
+                      ) : item.onPress ? (
+                        <ChevronIcon color={theme.textMuted} />
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
 
-                        return (
-                          <View key={method.id} style={[styles.paymentCard, { backgroundColor: cardColor }]}>
-                            <View style={styles.cardHeader}>
-                              <Text style={styles.cardIcon}>{method.icon ?? (isCard ? '💳' : '🏦')}</Text>
+                  {/* Expanded Payment Methods Cards - Inside the box */}
+                  {item.isExpandable && item.expanded && (
+                    <View style={styles.expandedSection}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.cardsScrollContent}
+                      >
+                        {/* Existing Payment Methods */}
+                        {paymentMethods.map((method) => {
+                          const isCard = method.type === 'card' || method.type === 'cash';
+                          const isCash = method.name?.toLowerCase() === 'cash';
+                          const cardColor = isCash ? '#10B981' : isCard ? '#EF4444' : '#4A90E2';
+
+                          return (
+                            <View key={method.id} style={[styles.paymentCard, { backgroundColor: cardColor }]}>
+                              <View style={styles.cardHeader}>
+                                <Text style={styles.cardIcon}>{method.icon ?? (isCard ? '💳' : '🏦')}</Text>
+                              </View>
+                              <View style={styles.cardBody}>
+                                <Text style={styles.cardName}>{method.name}</Text>
+                                {method.number && (
+                                  <Text style={styles.cardNumber}>•••• {method.number.slice(-4)}</Text>
+                                )}
+                              </View>
+                              <TouchableOpacity style={styles.cardButton} activeOpacity={0.8}>
+                                <Text style={styles.cardButtonText}>
+                                  {isCash ? 'Default' : 'Balance'}
+                                </Text>
+                              </TouchableOpacity>
                             </View>
-                            <View style={styles.cardBody}>
-                              <Text style={styles.cardName}>{method.name}</Text>
-                              {method.number && (
-                                <Text style={styles.cardNumber}>•••• {method.number.slice(-4)}</Text>
-                              )}
-                            </View>
-                            <TouchableOpacity style={styles.cardButton} activeOpacity={0.8}>
-                              <Text style={styles.cardButtonText}>
-                                {isCash ? 'Default' : 'Balance'}
-                              </Text>
-                            </TouchableOpacity>
+                          );
+                        })}
+
+                        {/* Add Card Button */}
+                        <TouchableOpacity
+                          style={styles.addCard}
+                          onPress={() => openAddModal('card')}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.addCardIconBox}>
+                            <PlusIcon color={theme.green} />
                           </View>
-                        );
-                      })}
+                          <CardIcon color={theme.textPrimary} />
+                          <Text style={styles.addCardText}>Add Card</Text>
+                        </TouchableOpacity>
 
-                      {/* Add Card Button */}
-                      <TouchableOpacity
-                        style={styles.addCard}
-                        onPress={() => openAddModal('card')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.addCardIconBox}>
-                          <PlusIcon color={theme.green} />
-                        </View>
-                        <CardIcon color={theme.textPrimary} />
-                        <Text style={styles.addCardText}>Add Card</Text>
-                      </TouchableOpacity>
-
-                      {/* Add Bank Button */}
-                      <TouchableOpacity
-                        style={styles.addCard}
-                        onPress={() => openAddModal('bank')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.addCardIconBox}>
-                          <PlusIcon color={theme.green} />
-                        </View>
-                        <BankIcon color={theme.textPrimary} />
-                        <Text style={styles.addCardText}>Add Bank</Text>
-                      </TouchableOpacity>
-                    </ScrollView>
-                  </View>
-                )}
+                        {/* Add Bank Button */}
+                        <TouchableOpacity
+                          style={styles.addCard}
+                          onPress={() => openAddModal('bank')}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.addCardIconBox}>
+                            <PlusIcon color={theme.green} />
+                          </View>
+                          <BankIcon color={theme.textPrimary} />
+                          <Text style={styles.addCardText}>Add Bank</Text>
+                        </TouchableOpacity>
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
               </View>
             ))}
           </View>
@@ -451,16 +456,22 @@ const createStyles = (theme) => StyleSheet.create({
   section:      { marginBottom: 24, paddingHorizontal: 16 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: theme.textMuted,
-    letterSpacing: 0.5, marginBottom: 10, opacity: 0.7,
+    letterSpacing: 0.5, marginBottom: 10, opacity: 0.7, marginTop: 20,
   },
 
   // ── Menu Item ──
   menuItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 12, paddingHorizontal: 12,
     backgroundColor: theme.bgSecondary,
     borderRadius: 12, marginBottom: 8,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
+  },
+  menuItemExpanded: {
+    paddingBottom: 12,
+  },
+  menuItemClickable: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 12, paddingHorizontal: 12,
   },
   menuItemLeft:     { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconBox: {
@@ -482,44 +493,45 @@ const createStyles = (theme) => StyleSheet.create({
 
   // ── Expanded Payment Methods Section ──
   expandedSection: {
-    marginTop: 8, marginBottom: 12,
-    paddingTop: 12, paddingBottom: 4,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   cardsScrollContent: { paddingHorizontal: 12, gap: 10 },
   
   // ── Payment Card ──
   paymentCard: {
-    width: 140, height: 160, borderRadius: 16,
-    padding: 14, justifyContent: 'space-between',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3, shadowRadius: 6, elevation: 4,
+    width: 120, height: 140, borderRadius: 14,
+    padding: 12, justifyContent: 'space-between',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
   },
   cardHeader: { alignItems: 'flex-end' },
-  cardIcon:   { fontSize: 24 },
+  cardIcon:   { fontSize: 20 },
   cardBody:   { flex: 1, justifyContent: 'center' },
-  cardName:   { fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
-  cardNumber: { fontSize: 11, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
+  cardName:   { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
+  cardNumber: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
   cardButton: {
     backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 10, paddingVertical: 6, alignItems: 'center',
+    borderRadius: 8, paddingVertical: 5, alignItems: 'center',
   },
-  cardButtonText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
+  cardButtonText: { fontSize: 10, fontWeight: '600', color: '#FFFFFF' },
 
   // ── Add Card ──
   addCard: {
-    width: 140, height: 160, borderRadius: 16,
-    backgroundColor: theme.bgSecondary,
+    width: 120, height: 140, borderRadius: 14,
+    backgroundColor: theme.bgElevated,
     borderWidth: 2, borderColor: 'rgba(255,255,255,0.12)',
     borderStyle: 'dashed',
-    justifyContent: 'center', alignItems: 'center', gap: 8,
+    justifyContent: 'center', alignItems: 'center', gap: 6,
   },
   addCardIconBox: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(78,205,196,0.15)',
     justifyContent: 'center', alignItems: 'center',
   },
   addCardText: {
-    fontSize: 12, fontWeight: '600', color: theme.textPrimary,
+    fontSize: 11, fontWeight: '600', color: theme.textPrimary,
     textAlign: 'center',
   },
 
