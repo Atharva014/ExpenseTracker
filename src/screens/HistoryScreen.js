@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, Modal, ScrollView,
+  TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Line, Polyline } from 'react-native-svg';
+import Svg, { Circle, Line } from 'react-native-svg';
 import { loadData } from '../utils/storage';
 import { getTheme, subscribeToTheme } from '../utils/theme';
 import { useFocusEffect } from '@react-navigation/native';
 
-// ─── Search icon ──────────────────────────────────────────────────────────────
 const SearchIcon = ({ color }) => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
     <Circle cx="11" cy="11" r="8" stroke={color} strokeWidth={2} />
@@ -17,7 +16,6 @@ const SearchIcon = ({ color }) => (
   </Svg>
 );
 
-// ─── Filter icon ──────────────────────────────────────────────────────────────
 const FilterIcon = ({ color }) => (
   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
     <Line x1="4" y1="6" x2="20" y2="6" stroke={color} strokeWidth={2} strokeLinecap="round" />
@@ -26,7 +24,6 @@ const FilterIcon = ({ color }) => (
   </Svg>
 );
 
-// ─── Close icon ───────────────────────────────────────────────────────────────
 const CloseIcon = ({ color }) => (
   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
     <Line x1="18" y1="6" x2="6" y2="18" stroke={color} strokeWidth={2} strokeLinecap="round" />
@@ -34,7 +31,6 @@ const CloseIcon = ({ color }) => (
   </Svg>
 );
 
-// ─── Group expenses by month ──────────────────────────────────────────────────
 const groupByMonth = (expenses) => {
   const groups = {};
   expenses.forEach(exp => {
@@ -48,17 +44,16 @@ const groupByMonth = (expenses) => {
   return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
 };
 
-// ─── Category filter options ───────────────────────────────────────────────────
 const PERIODS = ['All', 'This Month', 'Last Month', 'This Week'];
 
-const HistoryScreen = ({ navigation }) => {
-  const [data, setData]             = useState(null);
-  const [search, setSearch]         = useState('');
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('All');
-  const [selectedCats, setSelectedCats]     = useState([]);
-  const [theme, setThemeState]      = useState(getTheme());
+const HistoryScreen = () => {
+  const [data, setData]                       = useState(null);
+  const [search, setSearch]                   = useState('');
+  const [searchVisible, setSearchVisible]     = useState(false);
+  const [filterVisible, setFilterVisible]     = useState(false);
+  const [selectedPeriod, setSelectedPeriod]   = useState('All');
+  const [selectedCats, setSelectedCats]       = useState([]);
+  const [theme, setThemeState]                = useState(getTheme());
 
   useEffect(() => {
     loadAppData();
@@ -79,10 +74,9 @@ const HistoryScreen = ({ navigation }) => {
     if (!data?.expenses) return [];
     let filtered = [...data.expenses];
 
-    // Period filter
-    const now   = new Date();
-    const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const now              = new Date();
+    const startOfWeek      = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
+    const startOfMonth     = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth   = new Date(now.getFullYear(), now.getMonth(), 0);
 
@@ -97,12 +91,10 @@ const HistoryScreen = ({ navigation }) => {
       });
     }
 
-    // Category filter
     if (selectedCats.length > 0) {
       filtered = filtered.filter(e => selectedCats.includes(e.categoryId));
     }
 
-    // Search
     if (search.trim()) {
       const q = search.toLowerCase();
       filtered = filtered.filter(e =>
@@ -144,7 +136,6 @@ const HistoryScreen = ({ navigation }) => {
 
   const renderItem = ({ item: group }) => (
     <View style={styles.group}>
-      {/* Month header */}
       <View style={styles.monthHeader}>
         <Text style={styles.monthLabel}>{group.label}</Text>
         <Text style={styles.monthTotal}>
@@ -152,30 +143,22 @@ const HistoryScreen = ({ navigation }) => {
           <Text style={styles.monthTotalAmt}>₹{group.total.toLocaleString('en-IN')}</Text>
         </Text>
       </View>
-
-      {/* Transactions */}
       {group.items.map((expense, idx) => {
         const cat    = data.categories?.find(c => c.id === expense.categoryId);
         const isLast = idx === group.items.length - 1;
         return (
           <View key={expense.id}>
             <View style={styles.txRow}>
-              {/* Avatar / icon */}
               <View style={styles.txAvatar}>
                 <Text style={styles.txAvatarText}>{cat?.icon ?? '📦'}</Text>
               </View>
-
-              {/* Info */}
               <View style={styles.txInfo}>
                 <Text style={styles.txName} numberOfLines={1}>{expense.description}</Text>
                 <Text style={styles.txDate}>{fmtDate(expense.date)}</Text>
-                {/* Category tag */}
                 <View style={styles.txTag}>
                   <Text style={styles.txTagText}>{cat?.name ?? 'Other'}</Text>
                 </View>
               </View>
-
-              {/* Amount */}
               <Text style={styles.txAmount}>-₹{parseFloat(expense.amount).toLocaleString('en-IN')}</Text>
             </View>
             {!isLast && <View style={styles.divider} />}
@@ -252,7 +235,7 @@ const HistoryScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* ── List ── */}
+      {/* ── List (scrollable) ── */}
       {grouped.length > 0 ? (
         <FlatList
           data={grouped}
@@ -287,7 +270,6 @@ const HistoryScreen = ({ navigation }) => {
           <View style={styles.filterHandle} />
           <Text style={styles.filterTitle}>Filter Transactions</Text>
 
-          {/* Period */}
           <Text style={styles.filterSection}>TIME PERIOD</Text>
           <View style={styles.filterChips}>
             {PERIODS.map(p => (
@@ -304,7 +286,6 @@ const HistoryScreen = ({ navigation }) => {
             ))}
           </View>
 
-          {/* Category */}
           <Text style={styles.filterSection}>CATEGORY</Text>
           <View style={styles.filterChips}>
             {data.categories?.map(cat => {
@@ -342,14 +323,14 @@ const HistoryScreen = ({ navigation }) => {
 const createStyles = (theme) => StyleSheet.create({
   safeArea:    { flex: 1, backgroundColor: theme.bgPrimary },
   center:      { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  loadingText: { color: theme.textPrimary, fontSize: 16 },
+  loadingText: { color: theme.textPrimary, fontSize: 16, fontWeight: '600' },
 
-  // ── Header ──
+  // ── Header ── consistent font size/weight across all screens
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingTop: 16, paddingBottom: 12,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12,
   },
-  title: { fontSize: 22, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
+  title: { fontSize: 24, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
   headerIcons: { flexDirection: 'row', gap: 8 },
   iconBtn: {
     width: 38, height: 38, borderRadius: 12,

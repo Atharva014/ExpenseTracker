@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, Modal, FlatList,
+  Alert, Modal, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData, saveData } from '../utils/storage';
 import { getTheme, subscribeToTheme } from '../utils/theme';
 
 const AddExpenseScreen = () => {
-  const [amount, setAmount]           = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedPayment, setSelectedPayment]   = useState(null);
-  const [categories, setCategories]   = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]);
-  const [date, setDate]               = useState(new Date().toISOString().split('T')[0]);
+  const [amount, setAmount]                       = useState('');
+  const [description, setDescription]             = useState('');
+  const [selectedCategory, setSelectedCategory]   = useState(null);
+  const [selectedPayment, setSelectedPayment]     = useState(null);
+  const [categories, setCategories]               = useState([]);
+  const [paymentMethods, setPaymentMethods]       = useState([]);
+  const [date, setDate]                           = useState(new Date().toISOString().split('T')[0]);
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
-  const [theme, setThemeState]        = useState(getTheme());
+  const [theme, setThemeState]                    = useState(getTheme());
 
   useEffect(() => {
     loadFormData();
@@ -26,13 +26,17 @@ const AddExpenseScreen = () => {
 
   const loadFormData = async () => {
     const data = await loadData();
-    if (data?.categories) setCategories(data.categories);
+
+    // Ensure 'Others' category exists
+    let cats = data?.categories ?? [];
+    if (!cats.find(c => c.name?.toLowerCase() === 'others' || c.name?.toLowerCase() === 'other')) {
+      cats = [...cats, { id: 'others', name: 'Others', icon: '📦' }];
+    }
+    setCategories(cats);
+
     if (data?.paymentMethods) {
       setPaymentMethods(data.paymentMethods);
-      // Default to Cash
-      const cash = data.paymentMethods.find(p =>
-        p.name?.toLowerCase() === 'cash'
-      );
+      const cash = data.paymentMethods.find(p => p.name?.toLowerCase() === 'cash');
       setSelectedPayment(cash ?? data.paymentMethods[0] ?? null);
     }
   };
@@ -51,7 +55,7 @@ const AddExpenseScreen = () => {
     const newExpense = {
       id: Date.now().toString(),
       amount: parseFloat(amount).toFixed(2),
-      description: description.trim() || selectedCategory.name, // fallback to category name if empty
+      description: description.trim() || selectedCategory.name,
       categoryId: selectedCategory.id,
       paymentMethodId: selectedPayment?.id ?? null,
       date: new Date(date).toISOString(),
@@ -77,15 +81,16 @@ const AddExpenseScreen = () => {
 
   const styles = createStyles(theme);
 
+  // Split categories into two rows of 4 for a tight grid
+  const catRow1 = categories.slice(0, 4);
+  const catRow2 = categories.slice(4);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Header — no subtitle ── */}
+      {/* Non-scrollable root */}
+      <View style={styles.root}>
+
+        {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.title}>Add Expense</Text>
         </View>
@@ -106,7 +111,7 @@ const AddExpenseScreen = () => {
           </View>
         </View>
 
-        {/* ── Description (optional) ── */}
+        {/* ── Description ── */}
         <View style={styles.section}>
           <Text style={styles.label}>
             Description <Text style={styles.optional}>(Optional)</Text>
@@ -120,42 +125,43 @@ const AddExpenseScreen = () => {
           />
         </View>
 
-        {/* ── Date ── */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Date</Text>
-          <TextInput
-            style={styles.textInput}
-            value={date}
-            onChangeText={setDate}
-            placeholderTextColor={theme.textMuted}
-          />
-        </View>
-
-        {/* ── Payment Mode — dropdown ── */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Payment Mode</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setShowPaymentDropdown(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.dropdownLeft}>
-              {selectedPayment && (
-                <Text style={styles.dropdownIcon}>{selectedPayment.icon ?? '💵'}</Text>
-              )}
-              <Text style={styles.dropdownValue}>
-                {selectedPayment?.name ?? 'Select payment mode'}
-              </Text>
-            </View>
-            <Text style={styles.dropdownArrow}>▾</Text>
-          </TouchableOpacity>
+        {/* ── Date & Payment Mode side by side ── */}
+        <View style={styles.rowSection}>
+          <View style={[styles.halfSection, { marginRight: 6 }]}>
+            <Text style={styles.label}>Date</Text>
+            <TextInput
+              style={styles.textInput}
+              value={date}
+              onChangeText={setDate}
+              placeholderTextColor={theme.textMuted}
+            />
+          </View>
+          <View style={[styles.halfSection, { marginLeft: 6 }]}>
+            <Text style={styles.label}>Payment</Text>
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setShowPaymentDropdown(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.dropdownLeft}>
+                {selectedPayment && (
+                  <Text style={styles.dropdownIcon}>{selectedPayment.icon ?? '💵'}</Text>
+                )}
+                <Text style={styles.dropdownValue} numberOfLines={1}>
+                  {selectedPayment?.name ?? 'Select'}
+                </Text>
+              </View>
+              <Text style={styles.dropdownArrow}>▾</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Category chips ── */}
         <View style={styles.section}>
           <Text style={styles.label}>Category <Text style={styles.required}>*</Text></Text>
-          <View style={styles.chips}>
-            {categories.map(cat => {
+          {/* Row 1 */}
+          <View style={styles.chipRow}>
+            {catRow1.map(cat => {
               const isSelected = selectedCategory?.id === cat.id;
               return (
                 <TouchableOpacity
@@ -165,22 +171,43 @@ const AddExpenseScreen = () => {
                   activeOpacity={0.7}
                 >
                   <Text style={styles.chipIcon}>{cat.icon}</Text>
-                  <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                  <Text style={[styles.chipText, isSelected && styles.chipTextSelected]} numberOfLines={1}>
                     {cat.name}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+          {/* Row 2 */}
+          {catRow2.length > 0 && (
+            <View style={[styles.chipRow, { marginTop: 6 }]}>
+              {catRow2.map(cat => {
+                const isSelected = selectedCategory?.id === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[styles.chip, isSelected && styles.chipSelected]}
+                    onPress={() => setSelectedCategory(cat)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.chipIcon}>{cat.icon}</Text>
+                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]} numberOfLines={1}>
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* ── Save Button ── */}
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
           <Text style={styles.saveBtnText}>Save Expense</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
-      {/* ── Payment Mode Dropdown Modal ── */}
+      {/* ── Payment Mode Modal ── */}
       <Modal
         visible={showPaymentDropdown}
         transparent
@@ -226,39 +253,45 @@ const AddExpenseScreen = () => {
 };
 
 const createStyles = (theme) => StyleSheet.create({
-  safeArea:     { flex: 1, backgroundColor: theme.bgPrimary },
-  container:    { flex: 1 },
-  scrollContent: { paddingBottom: 120 },
+  safeArea: { flex: 1, backgroundColor: theme.bgPrimary },
+  root:     { flex: 1, paddingBottom: 8 },
 
   // ── Header ──
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: theme.textPrimary,
     letterSpacing: -0.5,
   },
 
-  // ── Section ──
+  // ── Sections ──
   section: {
     paddingHorizontal: 20,
-    marginTop: 20,
+    marginTop: 14,
   },
+  rowSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginTop: 14,
+  },
+  halfSection: { flex: 1 },
+
   label: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: theme.textPrimary,
     letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: 'uppercase',
   },
   required: { color: theme.red },
   optional: {
-    fontSize: 11,
+    fontSize: 10,
     color: theme.textMuted,
     fontWeight: '400',
     textTransform: 'none',
@@ -273,7 +306,7 @@ const createStyles = (theme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 14,
-    height: 48,
+    height: 46,
   },
   currencySymbol: {
     fontSize: 16,
@@ -289,35 +322,16 @@ const createStyles = (theme) => StyleSheet.create({
     padding: 0,
   },
 
-  // ── Category chips ──
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.12)',
+  // ── Text input ──
+  textInput: {
     backgroundColor: theme.bgSecondary,
-  },
-  chipSelected: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
-  },
-  chipIcon: { fontSize: 13 },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    height: 44,
+    fontSize: 13,
     color: theme.textPrimary,
-  },
-  chipTextSelected: {
-    color: '#1C2128',
   },
 
   // ── Dropdown ──
@@ -329,38 +343,58 @@ const createStyles = (theme) => StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    height: 46,
+    paddingHorizontal: 10,
+    height: 44,
   },
-  dropdownLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dropdownIcon:  { fontSize: 16 },
-  dropdownValue: { fontSize: 14, fontWeight: '500', color: theme.textPrimary },
-  dropdownArrow: { fontSize: 14, color: theme.textMuted },
+  dropdownLeft:  { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  dropdownIcon:  { fontSize: 14 },
+  dropdownValue: { fontSize: 12, fontWeight: '500', color: theme.textPrimary, flex: 1 },
+  dropdownArrow: { fontSize: 12, color: theme.textMuted, marginLeft: 4 },
 
-  // ── Text input ──
-  textInput: {
+  // ── Category chips (2 rows of 4) ──
+  chipRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  chip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.12)',
     backgroundColor: theme.bgSecondary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    height: 46,
-    fontSize: 14,
+  },
+  chipSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  chipIcon: { fontSize: 12 },
+  chipText: {
+    fontSize: 10,
+    fontWeight: '600',
     color: theme.textPrimary,
+  },
+  chipTextSelected: {
+    color: '#1C2128',
   },
 
   // ── Save button ──
   saveBtn: {
     marginHorizontal: 20,
-    marginTop: 32,
+    marginTop: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    height: 56,
+    borderRadius: 16,
+    height: 52,
     justifyContent: 'center',
     alignItems: 'center',
   },
   saveBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1C2128',
     letterSpacing: 0.3,
@@ -396,30 +430,12 @@ const createStyles = (theme) => StyleSheet.create({
     paddingVertical: 14,
     gap: 14,
   },
-  modalItemActive: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  modalItemIcon: { fontSize: 20 },
-  modalItemText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: theme.textPrimary,
-  },
-  modalItemTextActive: {
-    fontWeight: '700',
-    color: theme.green,
-  },
-  modalCheck: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.green,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginLeft: 58,
-  },
+  modalItemActive:     { backgroundColor: 'rgba(255,255,255,0.07)' },
+  modalItemIcon:       { fontSize: 20 },
+  modalItemText:       { flex: 1, fontSize: 15, fontWeight: '500', color: theme.textPrimary },
+  modalItemTextActive: { fontWeight: '700', color: theme.green },
+  modalCheck:          { fontSize: 16, fontWeight: '700', color: theme.green },
+  modalDivider:        { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginLeft: 58 },
 });
 
 export default AddExpenseScreen;

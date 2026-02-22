@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Modal, TextInput, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, TouchableOpacity,
+  Modal, TextInput, KeyboardAvoidingView, Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData } from '../utils/storage';
@@ -10,8 +11,6 @@ import { getTheme, subscribeToTheme } from '../utils/theme';
 import { useFocusEffect } from '@react-navigation/native';
 
 const INCOME_KEY = 'monthlyIncome';
-const RING_SIZE  = 110;
-const RING_THICK = 10;
 
 // ─── Ring chart (pure View) ───────────────────────────────────────────────────
 const RingChart = ({ progress, size, thickness, trackColor, fillColor, children }) => {
@@ -42,20 +41,17 @@ const RingChart = ({ progress, size, thickness, trackColor, fillColor, children 
     </View>
   );
 };
-// ─────────────────────────────────────────────────────────────────────────────
 
 const HomeScreen = ({ navigation }) => {
-  const [userName, setUserName]         = useState('User');
-  const [data, setData]                 = useState(null);
+  const [userName, setUserName]           = useState('User');
+  const [data, setData]                   = useState(null);
   const [monthlyIncome, setMonthlyIncome] = useState(65000);
-  const [showIncome, setShowIncome]     = useState(false);
-  const [showBalance, setShowBalance]   = useState(false);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [theme, setThemeState]          = useState(getTheme());
-
-  // Income edit modal
+  const [showIncome, setShowIncome]       = useState(false);
+  const [showBalance, setShowBalance]     = useState(false);
+  const [refreshing, setRefreshing]       = useState(false);
+  const [theme, setThemeState]            = useState(getTheme());
   const [incomeModalVisible, setIncomeModalVisible] = useState(false);
-  const [incomeInput, setIncomeInput]               = useState('');
+  const [incomeInput, setIncomeInput]     = useState('');
 
   useEffect(() => {
     loadAppData();
@@ -103,7 +99,9 @@ const HomeScreen = ({ navigation }) => {
 
   const totalExpense   = () => !data?.expenses ? 0 : data.expenses.reduce((s, e) => s + parseFloat(e.amount), 0);
   const currentBalance = () => monthlyIncome - totalExpense();
-  const recentExpenses = () => data?.expenses?.slice(0, 5) ?? [];
+
+  // Show last 10 recent expenses, scrollable inside the card
+  const recentExpenses = () => data?.expenses?.slice(0, 10) ?? [];
 
   const topCategories = () => {
     if (!data?.expenses || !data?.categories) return [];
@@ -121,7 +119,9 @@ const HomeScreen = ({ navigation }) => {
   const fmtAmount = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(1)}K` : `₹${v.toFixed(0)}`;
   const fmtFull   = (v) => `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // useMemo keeps styles stable and ensures no hook-order issues
+  // Progress: total expense / monthly income (clamped 0–1)
+  const ringProgress = monthlyIncome > 0 ? Math.min(totalExpense() / monthlyIncome, 1) : 0;
+
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   if (!data) {
@@ -140,12 +140,9 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textPrimary} />}
-      >
+      {/* ── Non-scrollable container ── */}
+      <View style={styles.root}>
+
         {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.greetingLine}>
@@ -159,9 +156,11 @@ const HomeScreen = ({ navigation }) => {
         {/* ── Ring Card ── */}
         <View style={styles.ringCard}>
           <RingChart
-            progress={Math.min(totalExpense() / monthlyIncome, 1)}
-            size={RING_SIZE} thickness={RING_THICK}
-            trackColor={theme.ringTrack} fillColor={theme.ringFill}
+            progress={ringProgress}
+            size={110}
+            thickness={10}
+            trackColor={theme.ringTrack}
+            fillColor={theme.ringFill}
           >
             <Text style={styles.ringAmount}>{fmtAmount(totalExpense())}</Text>
             <Text style={styles.ringSub}>SPENT</Text>
@@ -188,8 +187,6 @@ const HomeScreen = ({ navigation }) => {
 
         {/* ── Stat Pills ── */}
         <View style={styles.statRow}>
-
-          {/* Income — tap to reveal, long press to edit */}
           <TouchableOpacity
             style={styles.statPill}
             onPress={() => setShowIncome(!showIncome)}
@@ -203,12 +200,9 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.statPillAmount}>
               {showIncome ? fmtFull(monthlyIncome) : '••••••'}
             </Text>
-            <Text style={styles.statPillHint}>
-              {showIncome ? 'Tap to hide' : 'Tap to reveal'}
-            </Text>
+            <Text style={styles.statPillHint}>{showIncome ? 'Tap to hide' : 'Tap to reveal'}</Text>
           </TouchableOpacity>
 
-          {/* Balance */}
           <TouchableOpacity
             style={styles.statPill}
             onPress={() => setShowBalance(!showBalance)}
@@ -221,9 +215,7 @@ const HomeScreen = ({ navigation }) => {
             ]}>
               {showBalance ? fmtFull(currentBalance()) : '••••••'}
             </Text>
-            <Text style={styles.statPillHint}>
-              {showBalance ? 'Tap to hide' : 'Tap to reveal'}
-            </Text>
+            <Text style={styles.statPillHint}>{showBalance ? 'Tap to hide' : 'Tap to reveal'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -237,7 +229,11 @@ const HomeScreen = ({ navigation }) => {
           </View>
 
           {recent.length > 0 ? (
-            <>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="white"
+              bounces={false}
+            >
               {recent.map((expense, index) => {
                 const cat    = data.categories.find(c => c.id === expense.categoryId);
                 const isLast = index === recent.length - 1;
@@ -259,7 +255,7 @@ const HomeScreen = ({ navigation }) => {
                   </View>
                 );
               })}
-            </>
+            </ScrollView>
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>⊘</Text>
@@ -268,7 +264,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
           )}
         </View>
-      </ScrollView>
+      </View>
 
       {/* ── Edit Income Modal ── */}
       <Modal
@@ -298,18 +294,10 @@ const HomeScreen = ({ navigation }) => {
               />
             </View>
             <View style={styles.modalBtns}>
-              <TouchableOpacity
-                style={styles.modalBtnCancel}
-                onPress={() => setIncomeModalVisible(false)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setIncomeModalVisible(false)} activeOpacity={0.7}>
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalBtnSave}
-                onPress={() => saveIncome(incomeInput)}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.modalBtnSave} onPress={() => saveIncome(incomeInput)} activeOpacity={0.85}>
                 <Text style={styles.modalBtnSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -322,10 +310,9 @@ const HomeScreen = ({ navigation }) => {
 
 const createStyles = (theme) => StyleSheet.create({
   safeArea:         { flex: 1, backgroundColor: theme.bgPrimary },
-  container:        { flex: 1, backgroundColor: theme.bgPrimary },
-  scrollContent:    { paddingBottom: 120 },
+  root:             { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText:      { fontSize: 16, color: theme.textPrimary },
+  loadingText:      { fontSize: 15, color: theme.textPrimary, fontWeight: '600' },
 
   // ── Header ──
   header: {
@@ -362,7 +349,7 @@ const createStyles = (theme) => StyleSheet.create({
   ringMiniVal:    { fontSize: 11, fontWeight: '600', color: theme.textPrimary },
   noDataText:     { fontSize: 12, color: theme.textPrimary, opacity: 0.5, fontStyle: 'italic' },
 
-  // ── Stat Pills — no icons ──
+  // ── Stat Pills ──
   statRow:  { flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginBottom: 20 },
   statPill: {
     flex: 1, backgroundColor: theme.bgSecondary,
@@ -377,8 +364,10 @@ const createStyles = (theme) => StyleSheet.create({
   // ── Transaction card ──
   txCard: {
     marginHorizontal: 20,
+    marginBottom: 14,
+    flex: 1,
     backgroundColor: theme.bgSecondary,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
@@ -407,12 +396,12 @@ const createStyles = (theme) => StyleSheet.create({
   txDivider:  { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginLeft: 74, marginRight: 16 },
 
   // ── Empty ──
-  emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 },
-  emptyIcon:  { fontSize: 32, marginBottom: 12, color: theme.textPrimary, opacity: 0.3 },
-  emptyText:  { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
-  emptySub:   { fontSize: 12, color: theme.textPrimary, opacity: 0.5, textAlign: 'center', lineHeight: 18 },
+  emptyState: { alignItems: 'center', paddingVertical: 30, paddingHorizontal: 24 },
+  emptyIcon:  { fontSize: 28, marginBottom: 8, color: theme.textPrimary, opacity: 0.3 },
+  emptyText:  { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 },
+  emptySub:   { fontSize: 11, color: theme.textPrimary, opacity: 0.5, textAlign: 'center', lineHeight: 16 },
 
-  // ── Income edit modal ──
+  // ── Income modal ──
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center', alignItems: 'center', padding: 24,

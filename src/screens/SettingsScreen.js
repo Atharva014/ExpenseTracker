@@ -46,19 +46,19 @@ const PlusIcon = ({ color }) => (
   </Svg>
 );
 
-const SettingsScreen = ({ navigation }) => {
-  const [isDarkMode, setIsDarkMode] = useState(getCurrentTheme() === 'dark');
-  const [theme, setThemeState] = useState(getTheme());
-  const [userName, setUserName] = useState('Atharva');
-  const [userEmail, setUserEmail] = useState('user@example.com');
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [tempName, setTempName] = useState('');
-  const [tempEmail, setTempEmail] = useState('');
+const SettingsScreen = () => {
+  const [isDarkMode, setIsDarkMode]           = useState(getCurrentTheme() === 'dark');
+  const [theme, setThemeState]                = useState(getTheme());
+  const [userName, setUserName]               = useState('Atharva');
+  const [userEmail, setUserEmail]             = useState('user@example.com');
+  const [showEditModal, setShowEditModal]     = useState(false);
+  const [tempName, setTempName]               = useState('');
+  const [tempEmail, setTempEmail]             = useState('');
   const [paymentMethodsExpanded, setPaymentMethodsExpanded] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addType, setAddType] = useState('card');
-  const [newMethodName, setNewMethodName] = useState('');
+  const [paymentMethods, setPaymentMethods]   = useState([]);
+  const [showAddModal, setShowAddModal]       = useState(false);
+  const [addType, setAddType]                 = useState('card');
+  const [newMethodName, setNewMethodName]     = useState('');
   const [newMethodNumber, setNewMethodNumber] = useState('');
 
   useEffect(() => {
@@ -74,13 +74,11 @@ const SettingsScreen = ({ navigation }) => {
 
   const loadUserData = async () => {
     try {
-      const name = await AsyncStorage.getItem('userName');
+      const name  = await AsyncStorage.getItem('userName');
       const email = await AsyncStorage.getItem('userEmail');
       if (name) setUserName(name);
       if (email) setUserEmail(email);
-    } catch (error) {
-      console.error('Error loading user data:', error);
-    }
+    } catch (error) { console.error('Error loading user data:', error); }
   };
 
   const loadPaymentMethods = async () => {
@@ -88,9 +86,7 @@ const SettingsScreen = ({ navigation }) => {
       const { loadData } = await import('../utils/storage');
       const data = await loadData();
       setPaymentMethods(data.paymentMethods ?? []);
-    } catch (error) {
-      console.error('Error loading payment methods:', error);
-    }
+    } catch (error) { console.error('Error loading payment methods:', error); }
   };
 
   const handleAddMethod = async () => {
@@ -98,11 +94,9 @@ const SettingsScreen = ({ navigation }) => {
       Alert.alert('Error', 'Please enter a name');
       return;
     }
-
     try {
       const { loadData, saveData } = await import('../utils/storage');
       const data = await loadData();
-      
       const newMethod = {
         id: `pm_${Date.now()}`,
         name: newMethodName.trim(),
@@ -110,13 +104,7 @@ const SettingsScreen = ({ navigation }) => {
         icon: addType === 'card' ? '💳' : '🏦',
         number: newMethodNumber.trim() || null,
       };
-
-      const updatedData = {
-        ...data,
-        paymentMethods: [...(data.paymentMethods ?? []), newMethod],
-      };
-      await saveData(updatedData);
-
+      await saveData({ ...data, paymentMethods: [...(data.paymentMethods ?? []), newMethod] });
       setShowAddModal(false);
       setNewMethodName('');
       setNewMethodNumber('');
@@ -160,16 +148,15 @@ const SettingsScreen = ({ navigation }) => {
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  // Menu items organized by sections
   const sections = [
     {
       title: 'YOUR ACCOUNT',
       items: [
         { icon: '👤', label: 'My Profile', subtitle: userName, onPress: openEditModal },
-        { 
-          icon: '💳', 
-          label: 'Payment Methods', 
-          subtitle: 'Manage banks and cards', 
+        {
+          icon: '💳',
+          label: 'Payment Methods',
+          subtitle: 'Manage banks and cards',
           isExpandable: true,
           expanded: paymentMethodsExpanded,
           onPress: () => setPaymentMethodsExpanded(!paymentMethodsExpanded),
@@ -195,9 +182,9 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      {/* Header */}
+      {/* ── Header — consistent font across all screens ── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Account and Settings</Text>
+        <Text style={styles.headerTitle}>Account & Settings</Text>
       </View>
 
       <ScrollView
@@ -212,7 +199,7 @@ const SettingsScreen = ({ navigation }) => {
               <View key={iIdx}>
                 <View style={[
                   styles.menuItem,
-                  item.isExpandable && item.expanded && styles.menuItemExpanded
+                  item.isExpandable && item.expanded && styles.menuItemExpanded,
                 ]}>
                   <TouchableOpacity
                     style={styles.menuItemClickable}
@@ -250,14 +237,16 @@ const SettingsScreen = ({ navigation }) => {
                           style={{ marginLeft: 8 }}
                         />
                       ) : item.isExpandable ? (
-                        item.expanded ? <ChevronDownIcon color={theme.textMuted} /> : <ChevronIcon color={theme.textMuted} />
+                        item.expanded
+                          ? <ChevronDownIcon color={theme.textMuted} />
+                          : <ChevronIcon color={theme.textMuted} />
                       ) : item.onPress ? (
                         <ChevronIcon color={theme.textMuted} />
                       ) : null}
                     </View>
                   </TouchableOpacity>
 
-                  {/* Expanded Payment Methods Cards - Inside the box */}
+                  {/* Expanded Payment Methods */}
                   {item.isExpandable && item.expanded && (
                     <View style={styles.expandedSection}>
                       <ScrollView
@@ -265,12 +254,10 @@ const SettingsScreen = ({ navigation }) => {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.cardsScrollContent}
                       >
-                        {/* Existing Payment Methods */}
                         {paymentMethods.map((method) => {
-                          const isCard = method.type === 'card' || method.type === 'cash';
-                          const isCash = method.name?.toLowerCase() === 'cash';
+                          const isCard  = method.type === 'card' || method.type === 'cash';
+                          const isCash  = method.name?.toLowerCase() === 'cash';
                           const cardColor = isCash ? '#10B981' : isCard ? '#EF4444' : '#4A90E2';
-
                           return (
                             <View key={method.id} style={[styles.paymentCard, { backgroundColor: cardColor }]}>
                               <View style={styles.cardHeader}>
@@ -283,36 +270,20 @@ const SettingsScreen = ({ navigation }) => {
                                 )}
                               </View>
                               <TouchableOpacity style={styles.cardButton} activeOpacity={0.8}>
-                                <Text style={styles.cardButtonText}>
-                                  {isCash ? 'Default' : 'Balance'}
-                                </Text>
+                                <Text style={styles.cardButtonText}>{isCash ? 'Default' : 'Balance'}</Text>
                               </TouchableOpacity>
                             </View>
                           );
                         })}
 
-                        {/* Add Card Button */}
-                        <TouchableOpacity
-                          style={styles.addCard}
-                          onPress={() => openAddModal('card')}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.addCardIconBox}>
-                            <PlusIcon color={theme.green} />
-                          </View>
+                        <TouchableOpacity style={styles.addCard} onPress={() => openAddModal('card')} activeOpacity={0.7}>
+                          <View style={styles.addCardIconBox}><PlusIcon color={theme.green} /></View>
                           <CardIcon color={theme.textPrimary} />
                           <Text style={styles.addCardText}>Add Card</Text>
                         </TouchableOpacity>
 
-                        {/* Add Bank Button */}
-                        <TouchableOpacity
-                          style={styles.addCard}
-                          onPress={() => openAddModal('bank')}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.addCardIconBox}>
-                            <PlusIcon color={theme.green} />
-                          </View>
+                        <TouchableOpacity style={styles.addCard} onPress={() => openAddModal('bank')} activeOpacity={0.7}>
+                          <View style={styles.addCardIconBox}><PlusIcon color={theme.green} /></View>
                           <BankIcon color={theme.textPrimary} />
                           <Text style={styles.addCardText}>Add Bank</Text>
                         </TouchableOpacity>
@@ -325,56 +296,27 @@ const SettingsScreen = ({ navigation }) => {
           </View>
         ))}
 
-        {/* Logout Button */}
+        {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} activeOpacity={0.7}>
           <Text style={styles.logoutIcon}>🚪</Text>
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={showEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEditModal(false)}
-      >
+      {/* ── Edit Profile Modal ── */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Profile</Text>
-
             <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={tempName}
-              onChangeText={setTempName}
-              placeholder="Enter your name"
-              placeholderTextColor={theme.textMuted}
-            />
-
+            <TextInput style={styles.input} value={tempName} onChangeText={setTempName} placeholder="Enter your name" placeholderTextColor={theme.textMuted} />
             <Text style={styles.inputLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={tempEmail}
-              onChangeText={setTempEmail}
-              placeholder="Enter your email"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="email-address"
-            />
-
+            <TextInput style={styles.input} value={tempEmail} onChangeText={setTempEmail} placeholder="Enter your email" placeholderTextColor={theme.textMuted} keyboardType="email-address" />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalBtnCancel}
-                onPress={() => setShowEditModal(false)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowEditModal(false)} activeOpacity={0.7}>
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalBtnSave}
-                onPress={saveUserData}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.modalBtnSave} onPress={saveUserData} activeOpacity={0.85}>
                 <Text style={styles.modalBtnSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -382,54 +324,20 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* Add Payment Method Modal */}
-      <Modal
-        visible={showAddModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
-      >
+      {/* ── Add Payment Method Modal ── */}
+      <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Add {addType === 'card' ? 'Credit Card' : 'Bank Account'}
-            </Text>
-
+            <Text style={styles.modalTitle}>Add {addType === 'card' ? 'Credit Card' : 'Bank Account'}</Text>
             <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={newMethodName}
-              onChangeText={setNewMethodName}
-              placeholder={addType === 'card' ? 'e.g., HDFC Credit Card' : 'e.g., ICICI Bank'}
-              placeholderTextColor={theme.textMuted}
-            />
-
-            <Text style={styles.inputLabel}>
-              {addType === 'card' ? 'Last 4 digits (Optional)' : 'Account Number (Optional)'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={newMethodNumber}
-              onChangeText={setNewMethodNumber}
-              placeholder={addType === 'card' ? 'XXXX' : 'XXXXXXXXXX'}
-              placeholderTextColor={theme.textMuted}
-              keyboardType="number-pad"
-              maxLength={addType === 'card' ? 4 : 10}
-            />
-
+            <TextInput style={styles.input} value={newMethodName} onChangeText={setNewMethodName} placeholder={addType === 'card' ? 'e.g., HDFC Credit Card' : 'e.g., ICICI Bank'} placeholderTextColor={theme.textMuted} />
+            <Text style={styles.inputLabel}>{addType === 'card' ? 'Last 4 digits (Optional)' : 'Account Number (Optional)'}</Text>
+            <TextInput style={styles.input} value={newMethodNumber} onChangeText={setNewMethodNumber} placeholder={addType === 'card' ? 'XXXX' : 'XXXXXXXXXX'} placeholderTextColor={theme.textMuted} keyboardType="number-pad" maxLength={addType === 'card' ? 4 : 10} />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalBtnCancel}
-                onPress={() => setShowAddModal(false)}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowAddModal(false)} activeOpacity={0.7}>
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalBtnSave}
-                onPress={handleAddMethod}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.modalBtnSave} onPress={handleAddMethod} activeOpacity={0.85}>
                 <Text style={styles.modalBtnSaveText}>Add</Text>
               </TouchableOpacity>
             </View>
@@ -445,15 +353,23 @@ const createStyles = (theme) => StyleSheet.create({
   container:     { flex: 1 },
   scrollContent: { paddingBottom: 120 },
 
-  // ── Header ──
+  // ── Header — consistent font across all screens ──
   header: {
-    paddingHorizontal: 24, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  headerTitle: { fontSize: 22, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    letterSpacing: -0.5,
+  },
 
   // ── Section ──
-  section:      { marginBottom: 24, paddingHorizontal: 16 },
+  section:      { marginBottom: 4, paddingHorizontal: 16 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: theme.textMuted,
     letterSpacing: 0.5, marginBottom: 10, opacity: 0.7, marginTop: 20,
@@ -466,9 +382,7 @@ const createStyles = (theme) => StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
-  menuItemExpanded: {
-    paddingBottom: 12,
-  },
+  menuItemExpanded: { paddingBottom: 12 },
   menuItemClickable: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 12, paddingHorizontal: 12,
@@ -488,36 +402,32 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.green, borderRadius: 12,
     paddingHorizontal: 8, paddingVertical: 2,
   },
-  badgeText:  { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
-  rightText:  { fontSize: 13, color: theme.textMuted },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#FFFFFF' },
+  rightText: { fontSize: 13, color: theme.textMuted },
 
-  // ── Expanded Payment Methods Section ──
+  // ── Expanded Payment Methods ──
   expandedSection: {
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
   cardsScrollContent: { paddingHorizontal: 12, gap: 10 },
-  
-  // ── Payment Card ──
   paymentCard: {
     width: 120, height: 140, borderRadius: 14,
     padding: 12, justifyContent: 'space-between',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
   },
-  cardHeader: { alignItems: 'flex-end' },
-  cardIcon:   { fontSize: 20 },
-  cardBody:   { flex: 1, justifyContent: 'center' },
-  cardName:   { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
-  cardNumber: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
+  cardHeader:     { alignItems: 'flex-end' },
+  cardIcon:       { fontSize: 20 },
+  cardBody:       { flex: 1, justifyContent: 'center' },
+  cardName:       { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
+  cardNumber:     { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
   cardButton: {
     backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 8, paddingVertical: 5, alignItems: 'center',
   },
   cardButtonText: { fontSize: 10, fontWeight: '600', color: '#FFFFFF' },
-
-  // ── Add Card ──
   addCard: {
     width: 120, height: 140, borderRadius: 14,
     backgroundColor: theme.bgElevated,
@@ -530,10 +440,7 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: 'rgba(78,205,196,0.15)',
     justifyContent: 'center', alignItems: 'center',
   },
-  addCardText: {
-    fontSize: 11, fontWeight: '600', color: theme.textPrimary,
-    textAlign: 'center',
-  },
+  addCardText: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' },
 
   // ── Logout ──
   logoutButton: {
@@ -554,8 +461,8 @@ const createStyles = (theme) => StyleSheet.create({
     width: '100%', backgroundColor: theme.bgCard,
     borderRadius: 24, padding: 24,
   },
-  modalTitle:    { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 20, textAlign: 'center' },
-  inputLabel:    { fontSize: 12, fontWeight: '600', color: theme.textPrimary, marginBottom: 8, marginTop: 12 },
+  modalTitle:         { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 20, textAlign: 'center' },
+  inputLabel:         { fontSize: 12, fontWeight: '600', color: theme.textPrimary, marginBottom: 8, marginTop: 12 },
   input: {
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12, padding: 14,
@@ -574,7 +481,7 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: '#FFFFFF',
     justifyContent: 'center', alignItems: 'center',
   },
-  modalBtnSaveText:   { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+  modalBtnSaveText: { fontSize: 15, fontWeight: '700', color: '#1C2128' },
 });
 
 export default SettingsScreen;
