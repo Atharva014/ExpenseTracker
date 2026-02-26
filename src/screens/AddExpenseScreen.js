@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  Alert, Modal, FlatList,
+  Modal, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { loadData, saveData } from '../utils/storage';
@@ -22,11 +22,16 @@ const AddExpenseScreen = () => {
   const [categories, setCategories]                   = useState([]);
   const [paymentMethods, setPaymentMethods]           = useState([]);
 
-  // Payment type pill: 'upi' | 'card' | 'cash'
   const [selectedPaymentType, setSelectedPaymentType] = useState('upi');
-  // The specific sub-account selected (card / bank)
   const [selectedSubAccount, setSelectedSubAccount]   = useState(null);
   const [showSubDropdown, setShowSubDropdown]         = useState(false);
+
+  // ── Themed dialog state ──
+  const [dialog, setDialog] = useState(null);
+  // dialog = { title, message, buttons: [{label, onPress, danger?}] }
+
+  const showDialog = (title, message, buttons) => setDialog({ title, message, buttons });
+  const closeDialog = () => setDialog(null);
 
   const [theme, setThemeState] = useState(getTheme());
 
@@ -83,11 +88,15 @@ const AddExpenseScreen = () => {
 
   const handleSave = async () => {
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      showDialog('Invalid Amount', 'Please enter a valid positive amount.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
       return;
     }
     if (!selectedCategory) {
-      Alert.alert('Select Category', 'Please select a category.');
+      showDialog('Select Category', 'Please choose a category before saving.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
       return;
     }
 
@@ -102,15 +111,12 @@ const AddExpenseScreen = () => {
       date: new Date(date).toISOString(),
     };
 
-    const updatedData = {
-      ...data,
-      expenses: [newExpense, ...(data.expenses ?? [])],
-    };
-    await saveData(updatedData);
+    await saveData({ ...data, expenses: [newExpense, ...(data.expenses ?? [])] });
 
-    Alert.alert('Saved!', 'Expense recorded successfully.', [
+    showDialog('Expense Saved', `₹${parseFloat(amount).toLocaleString('en-IN')} added successfully.`, [
       {
-        text: 'OK', onPress: () => {
+        label: 'OK', onPress: () => {
+          closeDialog();
           setAmount('');
           setDescription('');
           setSelectedCategory(null);
@@ -312,6 +318,32 @@ const AddExpenseScreen = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* ── Themed Dialog ── */}
+      {dialog && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeDialog}>
+          <View style={styles.dialogOverlay}>
+            <View style={styles.dialogBox}>
+              <Text style={styles.dialogTitle}>{dialog.title}</Text>
+              <Text style={styles.dialogMessage}>{dialog.message}</Text>
+              <View style={styles.dialogBtns}>
+                {dialog.buttons.map((btn, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.dialogBtn, btn.danger && styles.dialogBtnDanger, dialog.buttons.length === 1 && { flex: 1 }]}
+                    onPress={btn.onPress}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.dialogBtnText, btn.danger && styles.dialogBtnTextDanger]}>
+                      {btn.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -465,7 +497,7 @@ const createStyles = (theme) => StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   categoryPillIcon:         { fontSize: 16 },
-  categoryPillText:         { fontSize: 13, fontWeight: '600', color: theme.textPrimary },
+  categoryPillText:         { fontSize: 12, fontWeight: '600', color: theme.textPrimary },
   categoryPillTextSelected: { color: '#1C2128' },
 
   // ── Save button ──
@@ -537,6 +569,28 @@ const createStyles = (theme) => StyleSheet.create({
   modalEmptyHint: {
     fontSize: 12, color: theme.textMuted, textAlign: 'center', lineHeight: 18,
   },
+
+  // ── Themed Dialog ──
+  dialogOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  dialogBox: {
+    width: '100%', backgroundColor: theme.bgCard,
+    borderRadius: 24, padding: 24,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  dialogTitle:   { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textAlign: 'center' },
+  dialogMessage: { fontSize: 14, color: theme.textMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  dialogBtns:    { flexDirection: 'row', gap: 10 },
+  dialogBtn: {
+    flex: 1, height: 48, borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  dialogBtnDanger:     { backgroundColor: 'rgba(255,80,80,0.15)', borderWidth: 1, borderColor: 'rgba(255,80,80,0.3)' },
+  dialogBtnText:       { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+  dialogBtnTextDanger: { color: theme.red },
 });
 
 export default AddExpenseScreen;
