@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TouchableWithoutFeedback, TextInput, Modal, Alert, ScrollView,
+  TouchableWithoutFeedback, TextInput, Modal, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
@@ -62,12 +62,13 @@ const groupByMonth = (expenses) => {
     const label = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
     if (!groups[key]) groups[key] = { key, label, items: [], total: 0 };
     groups[key].items.push(exp);
-    groups[key].total += parseFloat(exp.amount);
+    // Only count non-income entries in "Total Spent"
+    if (exp.type !== 'income') groups[key].total += parseFloat(exp.amount);
   });
   return Object.values(groups).sort((a, b) => b.key.localeCompare(a.key));
 };
 
-const PERIODS = ['All', 'This Month', 'Last Month', 'This Week'];
+const PERIODS = ['All', 'This Week', 'This Month', 'Last Month', 'Custom'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const HistoryScreen = () => {
@@ -77,6 +78,10 @@ const HistoryScreen = () => {
   const [filterVisible, setFilterVisible]       = useState(false);
   const [selectedPeriod, setSelectedPeriod]     = useState('All');
   const [selectedCats, setSelectedCats]         = useState([]);
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState([]); // new: payment method filter
+  const [customFrom, setCustomFrom]             = useState('');     // new: custom date range
+  const [customTo, setCustomTo]                 = useState('');     // new
+  const [showAddedMoney, setShowAddedMoney]     = useState(false);  // show income/topup transactions
   const [theme, setThemeState]                  = useState(getTheme());
 
   // ── Edit sheet state ──
@@ -89,6 +94,11 @@ const HistoryScreen = () => {
   const [editSubAccount, setEditSubAccount]     = useState(null);
   const [showSubDropdown, setShowSubDropdown]   = useState(false);
   const [paymentMethods, setPaymentMethods]     = useState([]);
+
+  // ── Themed dialog ──
+  const [dialog, setDialog] = useState(null);
+  const showDialog = (title, message, buttons) => setDialog({ title, message, buttons });
+  const closeDialog = () => setDialog(null);
 
   useEffect(() => {
     loadAppData();
@@ -148,11 +158,15 @@ const HistoryScreen = () => {
   // ── Save edits ──
   const handleSaveEdit = async () => {
     if (!editAmount || isNaN(parseFloat(editAmount)) || parseFloat(editAmount) <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
+      showDialog('Invalid Amount', 'Please enter a valid positive amount.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
       return;
     }
     if (!editCategoryId) {
-      Alert.alert('Select Category', 'Please select a category.');
+      showDialog('Select Category', 'Please choose a category before saving.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
       return;
     }
 
@@ -177,15 +191,16 @@ const HistoryScreen = () => {
 
   // ── Delete ──
   const handleDelete = () => {
-    Alert.alert(
+    showDialog(
       'Delete Transaction',
       'Are you sure you want to delete this transaction? This cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { label: 'Cancel', onPress: closeDialog },
         {
-          text: 'Delete',
-          style: 'destructive',
+          label: 'Delete',
+          danger: true,
           onPress: async () => {
+            closeDialog();
             const appData = await loadData();
             const updatedExpenses = (appData.expenses ?? []).filter(e => e.id !== editExpense.id);
             await saveData({ ...appData, expenses: updatedExpenses });
@@ -202,6 +217,14 @@ const HistoryScreen = () => {
     if (!data?.expenses) return [];
     let filtered = [...data.expenses];
 
+    // By default hide income/topup transactions; show them only when toggled
+    if (!showAddedMoney) {
+      filtered = filtered.filter(e => e.type !== 'income');
+    } else {
+      // When showAddedMoney is on, show ONLY income transactions
+      filtered = filtered.filter(e => e.type === 'income');
+    }
+
     const now              = new Date();
     const startOfWeek      = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay());
     const startOfMonth     = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -214,7 +237,25 @@ const HistoryScreen = () => {
       const d = new Date(e.date);
       return d >= startOfLastMonth && d <= endOfLastMonth;
     });
-    if (selectedCats.length > 0) filtered = filtered.filter(e => selectedCats.includes(e.categoryId));
+    if (selectedPeriod === 'Custom' && customFrom && customTo) {
+      const from = new Date(customFrom);
+      const to   = new Date(customTo); to.setHours(23, 59, 59);
+      if (!isNaN(from) && !isNaN(to)) {
+        filtered = filtered.filter(e => {
+          const d = new Date(e.date);
+          return d >= from && d <= to;
+        });
+      }
+    }
+
+    // Category and payment filters only apply to expense view
+    if (!showAddedMoney) {
+      if (selectedCats.length > 0) filtered = filtered.filter(e => selectedCats.includes(e.categoryId));
+      if (selectedPaymentIds.length > 0) {
+        filtered = filtered.filter(e => selectedPaymentIds.includes(e.paymentMethodId));
+      }
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       filtered = filtered.filter(e =>
@@ -223,7 +264,7 @@ const HistoryScreen = () => {
       );
     }
     return filtered;
-  }, [data, search, selectedPeriod, selectedCats]);
+  }, [data, search, selectedPeriod, selectedCats, selectedPaymentIds, customFrom, customTo, showAddedMoney]);
 
   const grouped = useMemo(() => groupByMonth(filterExpenses), [filterExpenses]);
 
@@ -236,9 +277,10 @@ const HistoryScreen = () => {
     return cats;
   }, [data]);
 
-  const toggleCat   = (id) => setSelectedCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
-  const clearFilters = () => { setSelectedPeriod('All'); setSelectedCats([]); };
-  const activeFilters = selectedPeriod !== 'All' || selectedCats.length > 0;
+  const toggleCat      = (id) => setSelectedCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+  const togglePayment  = (id) => setSelectedPaymentIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  const clearFilters   = () => { setSelectedPeriod('All'); setSelectedCats([]); setSelectedPaymentIds([]); setCustomFrom(''); setCustomTo(''); setShowAddedMoney(false); };
+  const activeFilters  = selectedPeriod !== 'All' || selectedCats.length > 0 || selectedPaymentIds.length > 0 || showAddedMoney;
 
   const fmtDate = (iso) => {
     const d = new Date(iso);
@@ -247,35 +289,42 @@ const HistoryScreen = () => {
 
   // ── Transaction row ──
   const renderExpenseRow = (expense, isLast) => {
-    const cat = data.categories?.find(c => c.id === expense.categoryId);
+    const isIncome = expense.type === 'income';
+    const cat      = isIncome ? null : data.categories?.find(c => c.id === expense.categoryId);
     return (
       <View key={expense.id}>
         <TouchableOpacity
           style={styles.txRow}
-          onLongPress={() => openEdit(expense)}
+          onLongPress={() => !isIncome && openEdit(expense)}
           delayLongPress={400}
-          activeOpacity={0.75}
+          activeOpacity={isIncome ? 1 : 0.75}
         >
-          <View style={styles.txAvatar}>
-            <Text style={styles.txAvatarText}>{cat?.icon ?? '📦'}</Text>
+          <View style={[styles.txAvatar, isIncome && { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+            <Text style={styles.txAvatarText}>{isIncome ? '💰' : (cat?.icon ?? '📦')}</Text>
           </View>
           <View style={styles.txInfo}>
             <Text style={styles.txName} numberOfLines={1}>{expense.description}</Text>
             <Text style={styles.txDate}>{fmtDate(expense.date)}</Text>
-            <View style={styles.txTag}>
-              <Text style={styles.txTagText}>{cat?.name ?? 'Other'}</Text>
+            <View style={[styles.txTag, isIncome && { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+              <Text style={[styles.txTagText, isIncome && { color: '#10B981' }]}>
+                {isIncome ? 'Income' : (cat?.name ?? 'Other')}
+              </Text>
             </View>
           </View>
           <View style={styles.txRight}>
-            <Text style={styles.txAmount}>-₹{parseFloat(expense.amount).toLocaleString('en-IN')}</Text>
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => openEdit(expense)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              activeOpacity={0.6}
-            >
-              <EditIcon color={theme.textMuted} />
-            </TouchableOpacity>
+            <Text style={[styles.txAmount, isIncome && { color: '#10B981' }]}>
+              {isIncome ? '+' : '-'}₹{parseFloat(expense.amount).toLocaleString('en-IN')}
+            </Text>
+            {!isIncome && (
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => openEdit(expense)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.6}
+              >
+                <EditIcon color={theme.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
         {!isLast && <View style={styles.divider} />}
@@ -588,37 +637,123 @@ const HistoryScreen = () => {
           <View style={styles.filterHandle} />
           <Text style={styles.filterTitle}>Filter Transactions</Text>
 
-          <Text style={styles.filterSection}>TIME PERIOD</Text>
-          <View style={styles.filterChips}>
-            {PERIODS.map(p => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.filterChip, selectedPeriod === p && styles.filterChipActive]}
-                onPress={() => setSelectedPeriod(p)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterChipText, selectedPeriod === p && styles.filterChipTextActive]}>{p}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
 
-          <Text style={styles.filterSection}>CATEGORY</Text>
-          <View style={styles.filterChips}>
-            {data.categories?.map(cat => {
-              const active = selectedCats.includes(cat.id);
-              return (
+            {/* TIME PERIOD */}
+            <Text style={styles.filterSection}>TIME PERIOD</Text>
+            <View style={styles.filterChips}>
+              {PERIODS.map(p => (
                 <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                  onPress={() => toggleCat(cat.id)}
+                  key={p}
+                  style={[styles.filterChip, selectedPeriod === p && styles.filterChipActive]}
+                  onPress={() => setSelectedPeriod(p)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.filterChipText}>{cat.icon} </Text>
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{cat.name}</Text>
+                  <Text style={[styles.filterChipText, selectedPeriod === p && styles.filterChipTextActive]}>{p}</Text>
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+              ))}
+            </View>
+
+            {/* CUSTOM DATE RANGE — shown only when Custom selected */}
+            {selectedPeriod === 'Custom' && (
+              <View style={styles.customDateRow}>
+                <View style={styles.customDateField}>
+                  <Text style={styles.customDateLabel}>FROM</Text>
+                  <TextInput
+                    style={styles.customDateInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={theme.textMuted}
+                    value={customFrom}
+                    onChangeText={setCustomFrom}
+                    color={theme.textPrimary}
+                  />
+                </View>
+                <View style={styles.customDateSep} />
+                <View style={styles.customDateField}>
+                  <Text style={styles.customDateLabel}>TO</Text>
+                  <TextInput
+                    style={styles.customDateInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={theme.textMuted}
+                    value={customTo}
+                    onChangeText={setCustomTo}
+                    color={theme.textPrimary}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* TRANSACTION TYPE */}
+            <Text style={styles.filterSection}>TRANSACTION TYPE</Text>
+            <View style={styles.filterChips}>
+              <TouchableOpacity
+                style={[styles.filterChip, !showAddedMoney && styles.filterChipActive]}
+                onPress={() => setShowAddedMoney(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterChipText, !showAddedMoney && styles.filterChipTextActive]}>
+                  💸  Expenses
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterChip, showAddedMoney && styles.filterChipActive]}
+                onPress={() => setShowAddedMoney(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterChipText, showAddedMoney && styles.filterChipTextActive]}>
+                  💰  Added Money
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* CATEGORY — only shown in expense view */}
+            {!showAddedMoney && (
+              <>
+                <Text style={styles.filterSection}>CATEGORY</Text>
+                <View style={styles.filterChips}>
+                  {data.categories?.map(cat => {
+                    const active = selectedCats.includes(cat.id);
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                        onPress={() => toggleCat(cat.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                          {cat.icon}  {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {paymentMethods.length > 0 && (
+                  <>
+                    <Text style={styles.filterSection}>PAYMENT METHOD</Text>
+                    <View style={styles.filterChips}>
+                      {paymentMethods.map(pm => {
+                        const active = selectedPaymentIds.includes(pm.id);
+                        return (
+                          <TouchableOpacity
+                            key={pm.id}
+                            style={[styles.filterChip, active && styles.filterChipActive]}
+                            onPress={() => togglePayment(pm.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                              {pm.icon ?? '💳'}  {pm.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+
+          </ScrollView>
 
           <View style={styles.filterBtns}>
             <TouchableOpacity style={styles.filterBtnClear} onPress={clearFilters} activeOpacity={0.7}>
@@ -630,6 +765,32 @@ const HistoryScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* ── Themed Dialog ── */}
+      {dialog && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeDialog}>
+          <View style={styles.dialogOverlay}>
+            <View style={styles.dialogBox}>
+              <Text style={styles.dialogTitle}>{dialog.title}</Text>
+              <Text style={styles.dialogMessage}>{dialog.message}</Text>
+              <View style={styles.dialogBtns}>
+                {dialog.buttons.map((btn, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.dialogBtn, btn.danger && styles.dialogBtnDanger, dialog.buttons.length === 1 && { flex: 1 }]}
+                    onPress={btn.onPress}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.dialogBtnText, btn.danger && styles.dialogBtnTextDanger]}>
+                      {btn.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -893,6 +1054,36 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center',
   },
   filterBtnApplyText: { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+
+  // ── Custom date range ──
+  customDateRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: theme.bgSecondary, borderRadius: 14,
+    padding: 14, marginBottom: 20, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  customDateField:  { flex: 1 },
+  customDateLabel:  { fontSize: 9, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.8, marginBottom: 5 },
+  customDateInput:  { fontSize: 14, fontWeight: '500', padding: 0 },
+  customDateSep:    { width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.12)' },
+
+  // ── Themed Dialog ──
+  dialogOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  dialogBox: {
+    width: '100%', backgroundColor: theme.bgCard,
+    borderRadius: 24, padding: 24,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  dialogTitle:         { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textAlign: 'center' },
+  dialogMessage:       { fontSize: 14, color: theme.textMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  dialogBtns:          { flexDirection: 'row', gap: 10 },
+  dialogBtn:           { flex: 1, height: 48, borderRadius: 14, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  dialogBtnDanger:     { backgroundColor: 'rgba(255,80,80,0.15)', borderWidth: 1, borderColor: 'rgba(255,80,80,0.3)' },
+  dialogBtnText:       { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+  dialogBtnTextDanger: { color: theme.red },
 });
 
 export default HistoryScreen;

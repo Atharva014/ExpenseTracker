@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Switch, TextInput, Modal, Alert,
+  Switch, TextInput, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Line } from 'react-native-svg';
@@ -61,6 +61,11 @@ const SettingsScreen = () => {
   const [newMethodName, setNewMethodName]     = useState('');
   const [newMethodNumber, setNewMethodNumber] = useState('');
 
+  // ── Themed dialog ──
+  const [dialog, setDialog] = useState(null);
+  const showDialog = (title, message, buttons) => setDialog({ title, message, buttons });
+  const closeDialog = () => setDialog(null);
+
   useEffect(() => {
     loadUserData();
     loadPaymentMethods();
@@ -91,7 +96,9 @@ const SettingsScreen = () => {
 
   const handleAddMethod = async () => {
     if (!newMethodName.trim()) {
-      Alert.alert('Error', 'Please enter a name');
+      showDialog('Missing Name', 'Please enter a name for this payment method.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
       return;
     }
     try {
@@ -102,17 +109,46 @@ const SettingsScreen = () => {
         name: newMethodName.trim(),
         type: addType,
         icon: addType === 'card' ? '💳' : '🏦',
-        number: newMethodNumber.trim() || null,
+        number: newMethodNumber.trim() || '*',
       };
       await saveData({ ...data, paymentMethods: [...(data.paymentMethods ?? []), newMethod] });
       setShowAddModal(false);
       setNewMethodName('');
       setNewMethodNumber('');
       loadPaymentMethods();
-      Alert.alert('Success', `${addType === 'card' ? 'Card' : 'Bank account'} added successfully`);
+      showDialog('Added!', `${addType === 'card' ? 'Card' : 'Bank account'} added successfully.`, [
+        { label: 'OK', onPress: closeDialog },
+      ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to add payment method');
+      showDialog('Error', 'Failed to add payment method.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
     }
+  };
+
+  const handleDeleteMethod = (method) => {
+    showDialog(
+      'Remove Payment Method',
+      `Remove "${method.name}" from your payment methods? This cannot be undone.`,
+      [
+        { label: 'Cancel', onPress: closeDialog },
+        {
+          label: 'Remove',
+          danger: true,
+          onPress: async () => {
+            closeDialog();
+            try {
+              const { loadData, saveData } = await import('../utils/storage');
+              const data = await loadData();
+              await saveData({ ...data, paymentMethods: (data.paymentMethods ?? []).filter(m => m.id !== method.id) });
+              loadPaymentMethods();
+            } catch (e) {
+              showDialog('Error', 'Failed to remove payment method.', [{ label: 'OK', onPress: closeDialog }]);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const openAddModal = (type) => {
@@ -129,9 +165,13 @@ const SettingsScreen = () => {
       setUserName(tempName);
       setUserEmail(tempEmail);
       setShowEditModal(false);
-      Alert.alert('Success', 'Profile updated successfully');
+      showDialog('Profile Updated', 'Your profile has been saved successfully.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
+      showDialog('Error', 'Failed to update profile.', [
+        { label: 'OK', onPress: closeDialog },
+      ]);
     }
   };
 
@@ -144,6 +184,35 @@ const SettingsScreen = () => {
   const toggleTheme = (value) => {
     setIsDarkMode(value);
     setTheme(value ? 'dark' : 'light');
+  };
+
+  const handleClearData = () => {
+    showDialog(
+      'Clear All Data',
+      'This will permanently delete all your transactions. Categories and payment methods will be kept. This cannot be undone.',
+      [
+        { label: 'Cancel', onPress: closeDialog },
+        {
+          label: 'Clear Data',
+          danger: true,
+          onPress: async () => {
+            closeDialog();
+            try {
+              const { loadData, saveData } = await import('../utils/storage');
+              const data = await loadData();
+              await saveData({ ...data, expenses: [] });
+              showDialog('Done', 'All transaction data has been cleared.', [
+                { label: 'OK', onPress: closeDialog },
+              ]);
+            } catch (e) {
+              showDialog('Error', 'Failed to clear data.', [
+                { label: 'OK', onPress: closeDialog },
+              ]);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -168,7 +237,6 @@ const SettingsScreen = () => {
       items: [
         { icon: '🌙', label: 'Dark Mode', isSwitch: true, value: isDarkMode, onToggle: toggleTheme },
         { icon: '🌐', label: 'Language', subtitle: 'English', onPress: () => {} },
-        { icon: '💱', label: 'Currency', subtitle: '₹ INR', onPress: () => {} },
       ],
     },
     {
@@ -176,6 +244,13 @@ const SettingsScreen = () => {
       items: [
         { icon: '📄', label: 'Terms & Privacy Policy', onPress: () => {} },
         { icon: 'ℹ️', label: 'Version', rightText: '1.0.0' },
+      ],
+    },
+    {
+      title: 'DANGER ZONE',
+      isDanger: true,
+      items: [
+        { icon: '🗑️', label: 'Clear All Data', subtitle: 'Remove all recorded expenses', onPress: handleClearData, isDanger: true },
       ],
     },
   ];
@@ -194,11 +269,14 @@ const SettingsScreen = () => {
       >
         {sections.map((section, sIdx) => (
           <View key={sIdx} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={[styles.sectionTitle, section.isDanger && styles.sectionTitleDanger]}>
+              {section.title}
+            </Text>
             {section.items.map((item, iIdx) => (
               <View key={iIdx}>
                 <View style={[
                   styles.menuItem,
+                  item.isDanger && styles.menuItemDanger,
                   item.isExpandable && item.expanded && styles.menuItemExpanded,
                 ]}>
                   <TouchableOpacity
@@ -208,11 +286,13 @@ const SettingsScreen = () => {
                     disabled={!item.onPress && !item.isSwitch}
                   >
                     <View style={styles.menuItemLeft}>
-                      <View style={styles.iconBox}>
+                      <View style={[styles.iconBox, item.isDanger && styles.iconBoxDanger]}>
                         <Text style={styles.menuItemIcon}>{item.icon}</Text>
                       </View>
                       <View style={styles.menuItemTextWrap}>
-                        <Text style={styles.menuItemText}>{item.label}</Text>
+                        <Text style={[styles.menuItemText, item.isDanger && styles.menuItemTextDanger]}>
+                          {item.label}
+                        </Text>
                         {item.subtitle && (
                           <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
                         )}
@@ -254,24 +334,30 @@ const SettingsScreen = () => {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.cardsScrollContent}
                       >
-                        {paymentMethods.map((method) => {
-                          const isCard  = method.type === 'card' || method.type === 'cash';
-                          const isCash  = method.name?.toLowerCase() === 'cash';
-                          const cardColor = isCash ? '#10B981' : isCard ? '#EF4444' : '#4A90E2';
+                        {paymentMethods
+                          .filter(m => m.name?.toLowerCase() !== 'cash' && m.type !== 'cash' && m.id !== 'cash')
+                          .map((method) => {
+                          const isCard    = method.type === 'card';
+                          const cardColor = isCard ? '#EF4444' : '#4A90E2';
                           return (
                             <View key={method.id} style={[styles.paymentCard, { backgroundColor: cardColor }]}>
+                              {/* Delete button top-right */}
                               <View style={styles.cardHeader}>
-                                <Text style={styles.cardIcon}>{method.icon ?? (isCard ? '💳' : '🏦')}</Text>
+                                <TouchableOpacity
+                                  onPress={() => handleDeleteMethod(method)}
+                                  activeOpacity={0.7}
+                                  style={styles.cardDeleteBtn}
+                                >
+                                  <Text style={styles.cardDeleteIcon}>×</Text>
+                                </TouchableOpacity>
                               </View>
                               <View style={styles.cardBody}>
+                                <Text style={styles.cardIcon}>{method.icon ?? (isCard ? '💳' : '🏦')}</Text>
                                 <Text style={styles.cardName}>{method.name}</Text>
-                                {method.number && (
-                                  <Text style={styles.cardNumber}>•••• {method.number.slice(-4)}</Text>
-                                )}
+                                <Text style={styles.cardNumber}>
+                                  {method.number === '*' ? '••••' : `•••• ${String(method.number ?? '').slice(-4)}`}
+                                </Text>
                               </View>
-                              <TouchableOpacity style={styles.cardButton} activeOpacity={0.8}>
-                                <Text style={styles.cardButtonText}>{isCash ? 'Default' : 'Balance'}</Text>
-                              </TouchableOpacity>
                             </View>
                           );
                         })}
@@ -344,6 +430,32 @@ const SettingsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* ── Themed Dialog ── */}
+      {dialog && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeDialog}>
+          <View style={styles.dialogOverlay}>
+            <View style={styles.dialogBox}>
+              <Text style={styles.dialogTitle}>{dialog.title}</Text>
+              <Text style={styles.dialogMessage}>{dialog.message}</Text>
+              <View style={styles.dialogBtns}>
+                {dialog.buttons.map((btn, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.dialogBtn, btn.danger && styles.dialogBtnDanger, dialog.buttons.length === 1 && { flex: 1 }]}
+                    onPress={btn.onPress}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.dialogBtnText, btn.danger && styles.dialogBtnTextDanger]}>
+                      {btn.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -372,8 +484,10 @@ const createStyles = (theme) => StyleSheet.create({
   section:      { marginBottom: 4, paddingHorizontal: 16 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: theme.textMuted,
-    letterSpacing: 0.5, marginBottom: 10, opacity: 0.7, marginTop: 20,
+    letterSpacing: 0.5, marginBottom: 8, opacity: 0.7, marginTop: 12,
   },
+
+  sectionTitleDanger: { color: theme.red, opacity: 1 },
 
   // ── Menu Item ──
   menuItem: {
@@ -382,6 +496,9 @@ const createStyles = (theme) => StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
   },
+  menuItemDanger:     { borderColor: 'rgba(255,80,80,0.2)', backgroundColor: 'rgba(255,80,80,0.06)' },
+  iconBoxDanger:      { backgroundColor: 'rgba(255,80,80,0.12)' },
+  menuItemTextDanger: { color: theme.red },
   menuItemExpanded: { paddingBottom: 12 },
   menuItemClickable: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -413,27 +530,28 @@ const createStyles = (theme) => StyleSheet.create({
   },
   cardsScrollContent: { paddingHorizontal: 12, gap: 10 },
   paymentCard: {
-    width: 120, height: 140, borderRadius: 14,
-    padding: 12, justifyContent: 'space-between',
+    width: 110, height: 98, borderRadius: 14,
+    padding: 10, justifyContent: 'space-between',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 4, elevation: 3,
   },
-  cardHeader:     { alignItems: 'flex-end' },
-  cardIcon:       { fontSize: 20 },
-  cardBody:       { flex: 1, justifyContent: 'center' },
-  cardName:       { fontSize: 12, fontWeight: '700', color: '#FFFFFF', marginBottom: 3 },
-  cardNumber:     { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.9)' },
-  cardButton: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 8, paddingVertical: 5, alignItems: 'center',
+  cardHeader:    { alignItems: 'flex-end' },
+  cardDeleteBtn: {
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  cardButtonText: { fontSize: 10, fontWeight: '600', color: '#FFFFFF' },
+  cardDeleteIcon: { fontSize: 16, color: '#FFFFFF', lineHeight: 20, fontWeight: '700' },
+  cardBody:    { flex: 1, justifyContent: 'flex-end' },
+  cardIcon:    { fontSize: 18, marginBottom: 4 },
+  cardName:    { fontSize: 11, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
+  cardNumber:  { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.85)' },
   addCard: {
-    width: 120, height: 140, borderRadius: 14,
+    width: 110, height: 98, borderRadius: 14,
     backgroundColor: theme.bgElevated,
     borderWidth: 2, borderColor: 'rgba(255,255,255,0.12)',
     borderStyle: 'dashed',
-    justifyContent: 'center', alignItems: 'center', gap: 6,
+    justifyContent: 'center', alignItems: 'center', gap: 4,
   },
   addCardIconBox: {
     width: 36, height: 36, borderRadius: 18,
@@ -482,6 +600,24 @@ const createStyles = (theme) => StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   modalBtnSaveText: { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+
+  // ── Themed Dialog ──
+  dialogOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  dialogBox: {
+    width: '100%', backgroundColor: theme.bgCard,
+    borderRadius: 24, padding: 24,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  dialogTitle:         { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textAlign: 'center' },
+  dialogMessage:       { fontSize: 14, color: theme.textMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  dialogBtns:          { flexDirection: 'row', gap: 10 },
+  dialogBtn:           { flex: 1, height: 48, borderRadius: 14, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  dialogBtnDanger:     { backgroundColor: 'rgba(255,80,80,0.15)', borderWidth: 1, borderColor: 'rgba(255,80,80,0.3)' },
+  dialogBtnText:       { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+  dialogBtnTextDanger: { color: theme.red },
 });
 
 export default SettingsScreen;

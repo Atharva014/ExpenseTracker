@@ -6,35 +6,47 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { loadData } from '../utils/storage';
+import Svg, { Circle } from 'react-native-svg';
+import { loadData, loadMonthlyIncomeData, saveMonthlyIncome, addBalanceTopUp } from '../utils/storage';
 import { getTheme, subscribeToTheme } from '../utils/theme';
 import { useFocusEffect } from '@react-navigation/native';
 
-const INCOME_KEY = 'monthlyIncome';
 
-// ─── Ring chart (pure View) ───────────────────────────────────────────────────
+
+// ─── Ring chart (SVG — accurate at every percentage) ─────────────────────────
 const RingChart = ({ progress, size, thickness, trackColor, fillColor, children }) => {
-  const p        = Math.min(Math.max(progress, 0), 1);
-  const deg      = p * 360;
-  const half     = size / 2;
-  const rightDeg = Math.min(deg, 180);
-  const leftDeg  = Math.max(deg - 180, 0);
-
-  const disc = (color, rotate, extra = {}) => ({
-    position: 'absolute', width: size, height: size,
-    borderRadius: half, borderWidth: thickness, borderColor: color,
-    transform: [{ rotate: `${rotate}deg` }], ...extra,
-  });
+  const p             = Math.min(Math.max(progress, 0), 1);
+  const cx            = size / 2;
+  const cy            = size / 2;
+  const radius        = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled        = p * circumference;
+  const gap           = circumference - filled;
 
   return (
     <View style={{ width: size, height: size }}>
-      <View style={disc(trackColor, 0)} />
-      <View style={{ position: 'absolute', width: half, height: size, overflow: 'hidden', left: half }}>
-        <View style={disc(rightDeg > 0 ? fillColor : 'transparent', rightDeg - 180, { left: -half })} />
-      </View>
-      <View style={{ position: 'absolute', width: half, height: size, overflow: 'hidden', left: 0 }}>
-        <View style={disc(leftDeg > 0 ? fillColor : 'transparent', leftDeg)} />
-      </View>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        {/* Track (full circle, always visible) */}
+        <Circle
+          cx={cx} cy={cy} r={radius}
+          stroke={trackColor}
+          strokeWidth={thickness}
+          fill="none"
+        />
+        {/* Fill arc — strokeDasharray as array [filled, gap], rotated to start at top */}
+        {p > 0 && (
+          <Circle
+            cx={cx} cy={cy} r={radius}
+            stroke={fillColor}
+            strokeWidth={thickness}
+            fill="none"
+            strokeDasharray={[filled, gap]}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${cx}, ${cy}`}
+          />
+        )}
+      </Svg>
       <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
         {children}
       </View>
@@ -45,18 +57,20 @@ const RingChart = ({ progress, size, thickness, trackColor, fillColor, children 
 const HomeScreen = ({ navigation }) => {
   const [userName, setUserName]           = useState('User');
   const [data, setData]                   = useState(null);
-  const [monthlyIncome, setMonthlyIncome] = useState(65000);
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [carryover, setCarryover]         = useState(0);
   const [showIncome, setShowIncome]       = useState(false);
   const [showBalance, setShowBalance]     = useState(false);
   const [refreshing, setRefreshing]       = useState(false);
   const [theme, setThemeState]            = useState(getTheme());
   const [incomeModalVisible, setIncomeModalVisible] = useState(false);
   const [incomeInput, setIncomeInput]     = useState('');
+  const [balanceModalVisible, setBalanceModalVisible] = useState(false);
+  const [balanceInput, setBalanceInput]   = useState('');
 
   useEffect(() => {
     loadAppData();
     loadUserName();
-    loadIncome();
     const unsubscribe = subscribeToTheme(() => setThemeState(getTheme()));
     return unsubscribe;
   }, []);
@@ -70,25 +84,31 @@ const HomeScreen = ({ navigation }) => {
     } catch (e) { console.error(e); }
   };
 
-  const loadIncome = async () => {
-    try {
-      const saved = await AsyncStorage.getItem(INCOME_KEY);
-      if (saved) setMonthlyIncome(parseFloat(saved));
-    } catch (e) { console.error(e); }
+  const loadAppData = async () => {
+    const appData = await loadData();
+    setData(appData);
+    // Load income + carryover using the new storage helper
+    const incomeData = await loadMonthlyIncomeData(appData?.expenses ?? []);
+    setMonthlyIncome(incomeData.income);
+    setCarryover(incomeData.carryover);
   };
 
   const saveIncome = async (value) => {
     const parsed = parseFloat(value);
     if (!isNaN(parsed) && parsed > 0) {
-      setMonthlyIncome(parsed);
-      await AsyncStorage.setItem(INCOME_KEY, parsed.toString());
+      await saveMonthlyIncome(parsed, data?.expenses ?? []);
+      await loadAppData();
     }
     setIncomeModalVisible(false);
   };
 
-  const loadAppData = async () => {
-    const appData = await loadData();
-    setData(appData);
+  const saveBalanceTopUp = async (value) => {
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed) && parsed > 0) {
+      await addBalanceTopUp(parsed);
+      await loadAppData();
+    }
+    setBalanceModalVisible(false);
   };
 
   const onRefresh = async () => {
@@ -97,16 +117,30 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const totalExpense   = () => !data?.expenses ? 0 : data.expenses.reduce((s, e) => s + parseFloat(e.amount), 0);
-  const currentBalance = () => monthlyIncome - totalExpense();
+  // ── Current-month filter ──
+  const thisMonthExpenses = () => {
+    if (!data?.expenses) return [];
+    const now = new Date();
+    return data.expenses.filter(e => {
+      if (e.type === 'income') return false;
+      const d = new Date(e.date);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    });
+  };
 
-  // Show last 10 recent expenses, scrollable inside the card
-  const recentExpenses = () => data?.expenses?.slice(0, 10) ?? [];
+  const totalExpense   = () => thisMonthExpenses().reduce((s, e) => s + parseFloat(e.amount), 0);
+  // Balance = this month's income + carryover from last month - this month's expenses
+  const currentBalance = () => monthlyIncome + carryover - totalExpense();
+  // Ring shows how much of (income + carryover) has been spent
+  const effectiveIncome = monthlyIncome + carryover;
+
+  // Show last 10 recent expenses — exclude income transactions
+  const recentExpenses = () => (data?.expenses ?? []).filter(e => e.type !== 'income').slice(0, 10);
 
   const topCategories = () => {
-    if (!data?.expenses || !data?.categories) return [];
+    if (!data?.categories) return [];
     const totals = {};
-    data.expenses.forEach(exp => {
+    thisMonthExpenses().forEach(exp => {
       const cat = data.categories.find(c => c.id === exp.categoryId);
       if (cat) {
         totals[cat.name] = totals[cat.name] ?? { name: cat.name, total: 0 };
@@ -120,7 +154,7 @@ const HomeScreen = ({ navigation }) => {
   const fmtFull   = (v) => `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Progress: total expense / monthly income (clamped 0–1)
-  const ringProgress = monthlyIncome > 0 ? Math.min(totalExpense() / monthlyIncome, 1) : 0;
+  const ringProgress = effectiveIncome > 0 ? Math.min(totalExpense() / effectiveIncome, 1) : 0;
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -167,7 +201,7 @@ const HomeScreen = ({ navigation }) => {
           </RingChart>
 
           <View style={styles.ringInfo}>
-            <Text style={styles.ringInfoLabel}>TOTAL EXPENSE</Text>
+            <Text style={styles.ringInfoLabel}>THIS MONTH</Text>
             <Text style={styles.ringInfoAmount}>{fmtFull(totalExpense())}</Text>
             {topCats.length > 0 ? (
               <View style={styles.ringMiniStats}>
@@ -198,17 +232,28 @@ const HomeScreen = ({ navigation }) => {
           >
             <Text style={styles.statPillLabel}>INCOME <Text style={styles.statPillEdit}>(Hold to edit)</Text></Text>
             <Text style={styles.statPillAmount}>
-              {showIncome ? fmtFull(monthlyIncome) : '••••••'}
+              {showIncome ? fmtFull(effectiveIncome) : '••••••'}
             </Text>
-            <Text style={styles.statPillHint}>{showIncome ? 'Tap to hide' : 'Tap to reveal'}</Text>
+            {showIncome && carryover > 0 && (
+              <Text style={[styles.statPillHint, { color: theme.green }]}>
+                +{fmtFull(carryover)} carried over
+              </Text>
+            )}
+            {(!showIncome || carryover === 0) && (
+              <Text style={styles.statPillHint}>{showIncome ? 'Tap to hide' : 'Tap to reveal'}</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.statPill}
             onPress={() => setShowBalance(!showBalance)}
+            onLongPress={() => {
+              setBalanceInput('');
+              setBalanceModalVisible(true);
+            }}
             activeOpacity={0.7}
           >
-            <Text style={styles.statPillLabel}>BALANCE</Text>
+            <Text style={styles.statPillLabel}>BALANCE <Text style={styles.statPillEdit}>(Hold to add)</Text></Text>
             <Text style={[
               styles.statPillAmount,
               showBalance && { color: currentBalance() >= 0 ? theme.green : theme.red },
@@ -299,6 +344,48 @@ const HomeScreen = ({ navigation }) => {
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalBtnSave} onPress={() => saveIncome(incomeInput)} activeOpacity={0.85}>
                 <Text style={styles.modalBtnSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Add to Balance Modal ── */}
+      <Modal
+        visible={balanceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBalanceModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setBalanceModalVisible(false)} />
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Add to Balance</Text>
+            <Text style={styles.modalSub}>
+              Current balance: {fmtFull(currentBalance())}{'\n'}
+              Amount will be added on top of existing balance
+            </Text>
+            <View style={styles.modalInputRow}>
+              <Text style={styles.modalCurrency}>₹</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={balanceInput}
+                onChangeText={setBalanceInput}
+                keyboardType="decimal-pad"
+                placeholder="Enter amount to add"
+                placeholderTextColor={theme.textMuted}
+                autoFocus
+              />
+            </View>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setBalanceModalVisible(false)} activeOpacity={0.7}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnSave} onPress={() => saveBalanceTopUp(balanceInput)} activeOpacity={0.85}>
+                <Text style={styles.modalBtnSaveText}>Add</Text>
               </TouchableOpacity>
             </View>
           </View>
