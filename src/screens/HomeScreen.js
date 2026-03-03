@@ -67,6 +67,10 @@ const HomeScreen = ({ navigation }) => {
   const [incomeInput, setIncomeInput]     = useState('');
   const [balanceModalVisible, setBalanceModalVisible] = useState(false);
   const [balanceInput, setBalanceInput]   = useState('');
+  const [onboardingVisible, setOnboardingVisible] = useState(false);
+  const [onboardName, setOnboardName]     = useState('');
+  const [onboardEmail, setOnboardEmail]   = useState('');
+  const [onboardNameError, setOnboardNameError] = useState(false);
 
   useEffect(() => {
     loadAppData();
@@ -80,7 +84,27 @@ const HomeScreen = ({ navigation }) => {
   const loadUserName = async () => {
     try {
       const name = await AsyncStorage.getItem('userName');
-      if (name) setUserName(name);
+      if (name) {
+        setUserName(name);
+      } else {
+        // First launch — show onboarding dialog
+        setOnboardingVisible(true);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const saveOnboarding = async () => {
+    if (!onboardName.trim()) {
+      setOnboardNameError(true);
+      return;
+    }
+    try {
+      await AsyncStorage.setItem('userName', onboardName.trim());
+      if (onboardEmail.trim()) {
+        await AsyncStorage.setItem('userEmail', onboardEmail.trim());
+      }
+      setUserName(onboardName.trim());
+      setOnboardingVisible(false);
     } catch (e) { console.error(e); }
   };
 
@@ -391,6 +415,79 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      {/* ── First Launch Onboarding Modal ── */}
+      <Modal
+        visible={onboardingVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}   // prevent back-button dismiss
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={styles.onboardCard}>
+
+            {/* Header */}
+            <View style={styles.onboardHeader}>
+              <Text style={styles.onboardEmoji}>👋</Text>
+              <Text style={styles.onboardTitle}>Welcome!</Text>
+              <Text style={styles.onboardSub}>
+                Let's set up your profile to get started. Your name helps personalise the app.
+              </Text>
+            </View>
+
+            {/* Name input */}
+            <View style={styles.onboardFieldWrap}>
+              <Text style={styles.onboardLabel}>YOUR NAME <Text style={{ color: theme.red }}>*</Text></Text>
+              <View style={[styles.onboardInput, onboardNameError && styles.onboardInputError]}>
+                <Text style={styles.onboardInputIcon}>😊</Text>
+                <TextInput
+                  style={styles.onboardInputText}
+                  placeholder="Enter your name"
+                  placeholderTextColor={theme.textMuted}
+                  value={onboardName}
+                  onChangeText={v => { setOnboardName(v); setOnboardNameError(false); }}
+                  autoFocus
+                  returnKeyType="next"
+                />
+              </View>
+              {onboardNameError && (
+                <Text style={styles.onboardError}>Name is required to continue</Text>
+              )}
+            </View>
+
+            {/* Email input */}
+            <View style={styles.onboardFieldWrap}>
+              <Text style={styles.onboardLabel}>EMAIL <Text style={styles.onboardOptional}>(optional)</Text></Text>
+              <View style={styles.onboardInput}>
+                <Text style={styles.onboardInputIcon}>✉️</Text>
+                <TextInput
+                  style={styles.onboardInputText}
+                  placeholder="Enter your email"
+                  placeholderTextColor={theme.textMuted}
+                  value={onboardEmail}
+                  onChangeText={setOnboardEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={saveOnboarding}
+                />
+              </View>
+            </View>
+
+            {/* CTA */}
+            <TouchableOpacity
+              style={styles.onboardBtn}
+              onPress={saveOnboarding}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.onboardBtnText}>Get Started →</Text>
+            </TouchableOpacity>
+
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -521,6 +618,37 @@ const createStyles = (theme) => StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   modalBtnSaveText: { fontSize: 15, fontWeight: '700', color: '#1C2128' },
+
+  // ── Onboarding modal ──
+  onboardCard: {
+    width: '100%', backgroundColor: theme.bgCard,
+    borderRadius: 28, padding: 28,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  onboardHeader:  { alignItems: 'center', marginBottom: 28 },
+  onboardEmoji:   { fontSize: 48, marginBottom: 12 },
+  onboardTitle:   { fontSize: 26, fontWeight: '800', color: theme.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
+  onboardSub:     { fontSize: 13, color: theme.textMuted, textAlign: 'center', lineHeight: 19 },
+  onboardFieldWrap: { marginBottom: 16 },
+  onboardLabel:   { fontSize: 10, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.8, marginBottom: 8 },
+  onboardOptional:{ fontSize: 10, fontWeight: '400', color: theme.textMuted, opacity: 0.6 },
+  onboardInput: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: theme.bgSecondary,
+    borderRadius: 14, paddingHorizontal: 14, height: 52,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  },
+  onboardInputError: { borderColor: theme.red },
+  onboardInputIcon:  { fontSize: 16, marginRight: 10 },
+  onboardInputText:  { flex: 1, fontSize: 15, fontWeight: '500', color: theme.textPrimary, padding: 0 },
+  onboardError:   { fontSize: 11, color: theme.red, marginTop: 6, marginLeft: 4 },
+  onboardBtn: {
+    height: 54, borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 8,
+  },
+  onboardBtnText: { fontSize: 16, fontWeight: '800', color: '#1C2128', letterSpacing: -0.3 },
 });
 
 export default HomeScreen;

@@ -66,6 +66,10 @@ const SettingsScreen = () => {
   const showDialog = (title, message, buttons) => setDialog({ title, message, buttons });
   const closeDialog = () => setDialog(null);
 
+  // ── Import modal ──
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPath, setImportPath]           = useState('');
+
   useEffect(() => {
     loadUserData();
     loadPaymentMethods();
@@ -215,6 +219,67 @@ const SettingsScreen = () => {
     );
   };
 
+  const handleExport = async () => {
+    try {
+      const { exportBackup } = await import('../utils/storage');
+      const path = await exportBackup();
+      if (path) {
+        showDialog(
+          '✅ Export Successful',
+          `Your data has been saved to:\n\n${path}\n\nYou can find it in your Downloads folder.`,
+          [{ label: 'OK', onPress: closeDialog }]
+        );
+      } else {
+        showDialog('Error', 'Failed to export data. Please try again.', [{ label: 'OK', onPress: closeDialog }]);
+      }
+    } catch (e) {
+      showDialog('Error', 'Failed to export data.', [{ label: 'OK', onPress: closeDialog }]);
+    }
+  };
+
+  const handleImport = () => {
+    setImportPath('');
+    setShowImportModal(true);
+  };
+
+  const doImport = async () => {
+    const filePath = importPath.trim();
+    if (!filePath) {
+      showDialog('Missing Path', 'Please enter the path to your backup file.', [{ label: 'OK', onPress: closeDialog }]);
+      return;
+    }
+    setShowImportModal(false);
+    showDialog(
+      'Import Data',
+      'This will replace ALL your current data with the imported file. This cannot be undone. Are you sure?',
+      [
+        { label: 'Cancel', onPress: closeDialog },
+        {
+          label: 'Import',
+          danger: true,
+          onPress: async () => {
+            closeDialog();
+            try {
+              const { importBackup } = await import('../utils/storage');
+              const success = await importBackup(filePath);
+              if (success) {
+                showDialog('✅ Import Successful', 'Your data has been restored successfully. Restart the app to see all changes.', [
+                  { label: 'OK', onPress: closeDialog },
+                ]);
+              } else {
+                showDialog('Error', 'Failed to import. Make sure the path is correct and the file is a valid ExpenseTracker backup.', [
+                  { label: 'OK', onPress: closeDialog },
+                ]);
+              }
+            } catch (e) {
+              showDialog('Error', 'Import failed. The file may be corrupted or path is wrong.', [{ label: 'OK', onPress: closeDialog }]);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const sections = [
@@ -240,9 +305,25 @@ const SettingsScreen = () => {
       ],
     },
     {
+      title: 'DATA BACKUP',
+      items: [
+        {
+          icon: '📤',
+          label: 'Export Data',
+          subtitle: 'Save all transactions to Downloads',
+          onPress: handleExport,
+        },
+        {
+          icon: '📥',
+          label: 'Import Data',
+          subtitle: 'Restore from a backup file',
+          onPress: handleImport,
+        },
+      ],
+    },
+    {
       title: 'ABOUT',
       items: [
-        { icon: '📄', label: 'Terms & Privacy Policy', onPress: () => {} },
         { icon: 'ℹ️', label: 'Version', rightText: '1.0.0' },
       ],
     },
@@ -327,55 +408,87 @@ const SettingsScreen = () => {
                   </TouchableOpacity>
 
                   {/* Expanded Payment Methods */}
-                  {item.isExpandable && item.expanded && (
-                    <View style={styles.expandedSection}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.cardsScrollContent}
-                      >
-                        {paymentMethods
-                          .filter(m => m.name?.toLowerCase() !== 'cash' && m.type !== 'cash' && m.id !== 'cash')
-                          .map((method) => {
-                          const isCard    = method.type === 'card';
-                          const cardColor = isCard ? '#EF4444' : '#4A90E2';
-                          return (
-                            <View key={method.id} style={[styles.paymentCard, { backgroundColor: cardColor }]}>
-                              {/* Delete button top-right */}
-                              <View style={styles.cardHeader}>
-                                <TouchableOpacity
-                                  onPress={() => handleDeleteMethod(method)}
-                                  activeOpacity={0.7}
-                                  style={styles.cardDeleteBtn}
-                                >
-                                  <Text style={styles.cardDeleteIcon}>×</Text>
-                                </TouchableOpacity>
-                              </View>
-                              <View style={styles.cardBody}>
-                                <Text style={styles.cardIcon}>{method.icon ?? (isCard ? '💳' : '🏦')}</Text>
-                                <Text style={styles.cardName}>{method.name}</Text>
-                                <Text style={styles.cardNumber}>
-                                  {method.number === '*' ? '••••' : `•••• ${String(method.number ?? '').slice(-4)}`}
-                                </Text>
-                              </View>
-                            </View>
-                          );
-                        })}
+                  {item.isExpandable && item.expanded && (() => {
+                    const filtered = paymentMethods.filter(
+                      m => m.name?.toLowerCase() !== 'cash' && m.type !== 'cash' && m.id !== 'cash'
+                    );
+                    const cards = filtered.filter(m => m.type === 'card');
+                    const banks = filtered.filter(m => m.type !== 'card');
 
-                        <TouchableOpacity style={styles.addCard} onPress={() => openAddModal('card')} activeOpacity={0.7}>
-                          <View style={styles.addCardIconBox}><PlusIcon color={theme.green} /></View>
-                          <CardIcon color={theme.textPrimary} />
-                          <Text style={styles.addCardText}>Add Card</Text>
-                        </TouchableOpacity>
+                    return (
+                      <View style={styles.expandedSection}>
 
-                        <TouchableOpacity style={styles.addCard} onPress={() => openAddModal('bank')} activeOpacity={0.7}>
-                          <View style={styles.addCardIconBox}><PlusIcon color={theme.green} /></View>
-                          <BankIcon color={theme.textPrimary} />
-                          <Text style={styles.addCardText}>Add Bank</Text>
-                        </TouchableOpacity>
-                      </ScrollView>
-                    </View>
-                  )}
+                        {/* ── CARDS row ── */}
+                        <View style={styles.pmGroup}>
+                          <View style={styles.pmGroupHeader}>
+                            <Text style={styles.pmGroupLabel}>💳  CARDS</Text>
+                            <TouchableOpacity onPress={() => openAddModal('card')} activeOpacity={0.7} style={styles.pmAddBtn}>
+                              <PlusIcon color={theme.green} />
+                              <Text style={styles.pmAddText}>Add</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardsScrollContent}>
+                            {cards.length === 0 ? (
+                              <TouchableOpacity style={styles.pmEmpty} onPress={() => openAddModal('card')} activeOpacity={0.7}>
+                                <Text style={styles.pmEmptyIcon}>💳</Text>
+                                <Text style={styles.pmEmptyText}>No cards added yet</Text>
+                              </TouchableOpacity>
+                            ) : cards.map(method => (
+                              <View key={method.id} style={[styles.paymentCard, { backgroundColor: '#C0392B' }]}>
+                                <View style={styles.cardHeader}>
+                                  <TouchableOpacity onPress={() => handleDeleteMethod(method)} activeOpacity={0.7} style={styles.cardDeleteBtn}>
+                                    <Text style={styles.cardDeleteIcon}>×</Text>
+                                  </TouchableOpacity>
+                                </View>
+                                <View style={styles.cardBody}>
+                                  <Text style={styles.cardIcon}>{method.icon ?? '💳'}</Text>
+                                  <Text style={styles.cardName}>{method.name}</Text>
+                                  <Text style={styles.cardNumber}>
+                                    {method.number === '*' ? '••••' : `•••• ${String(method.number ?? '').slice(-4)}`}
+                                  </Text>
+                                </View>
+                              </View>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                        {/* ── BANK ACCOUNTS row ── */}
+                        <View style={styles.pmGroup}>
+                          <View style={styles.pmGroupHeader}>
+                            <Text style={styles.pmGroupLabel}>🏦  BANK ACCOUNTS</Text>
+                            <TouchableOpacity onPress={() => openAddModal('bank')} activeOpacity={0.7} style={styles.pmAddBtn}>
+                              <PlusIcon color={theme.green} />
+                              <Text style={styles.pmAddText}>Add</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardsScrollContent}>
+                            {banks.length === 0 ? (
+                              <TouchableOpacity style={styles.pmEmpty} onPress={() => openAddModal('bank')} activeOpacity={0.7}>
+                                <Text style={styles.pmEmptyIcon}>🏦</Text>
+                                <Text style={styles.pmEmptyText}>No bank accounts added yet</Text>
+                              </TouchableOpacity>
+                            ) : banks.map(method => (
+                              <View key={method.id} style={[styles.paymentCard, { backgroundColor: '#2471A3' }]}>
+                                <View style={styles.cardHeader}>
+                                  <TouchableOpacity onPress={() => handleDeleteMethod(method)} activeOpacity={0.7} style={styles.cardDeleteBtn}>
+                                    <Text style={styles.cardDeleteIcon}>×</Text>
+                                  </TouchableOpacity>
+                                </View>
+                                <View style={styles.cardBody}>
+                                  <Text style={styles.cardIcon}>{method.icon ?? '🏦'}</Text>
+                                  <Text style={styles.cardName}>{method.name}</Text>
+                                  <Text style={styles.cardNumber}>
+                                    {method.number === '*' ? '••••' : `•••• ${String(method.number ?? '').slice(-4)}`}
+                                  </Text>
+                                </View>
+                              </View>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                      </View>
+                    );
+                  })()}
                 </View>
               </View>
             ))}
@@ -431,6 +544,37 @@ const SettingsScreen = () => {
         </View>
       </Modal>
 
+      {/* ── Import Path Modal ── */}
+      <Modal visible={showImportModal} transparent animationType="slide" onRequestClose={() => setShowImportModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Import Backup</Text>
+            <Text style={styles.inputLabel}>Backup File Path</Text>
+            <Text style={[styles.inputLabel, { fontSize: 11, opacity: 0.6, marginTop: 0, textTransform: 'none' }]}>
+              e.g. /storage/emulated/0/Download/expense_backup_123.json
+            </Text>
+            <TextInput
+              style={[styles.input, { marginTop: 8 }]}
+              value={importPath}
+              onChangeText={setImportPath}
+              placeholder="Paste full file path here"
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setShowImportModal(false)} activeOpacity={0.7}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBtnSave} onPress={doImport} activeOpacity={0.85}>
+                <Text style={styles.modalBtnSaveText}>Import</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Themed Dialog ── */}
       {dialog && (
         <Modal visible transparent animationType="fade" onRequestClose={closeDialog}>
@@ -474,7 +618,7 @@ const createStyles = (theme) => StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: theme.textPrimary,
     letterSpacing: -0.5,
@@ -527,8 +671,30 @@ const createStyles = (theme) => StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
+    gap: 16,
   },
   cardsScrollContent: { paddingHorizontal: 12, gap: 10 },
+
+  // ── Payment method groups ──
+  pmGroup:       { gap: 8 },
+  pmGroupHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 14,
+  },
+  pmGroupLabel:  { fontSize: 10, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.8 },
+  pmAddBtn:      {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingVertical: 4, paddingHorizontal: 8, borderRadius: 10,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+  },
+  pmAddText:     { fontSize: 12, fontWeight: '600', color: theme.green },
+  pmEmpty: {
+    width: 150, height: 90, borderRadius: 14,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.12)',
+    borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  pmEmptyIcon:   { fontSize: 22 },
+  pmEmptyText:   { fontSize: 11, color: theme.textMuted, textAlign: 'center' },
   paymentCard: {
     width: 110, height: 98, borderRadius: 14,
     padding: 10, justifyContent: 'space-between',

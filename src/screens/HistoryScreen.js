@@ -806,7 +806,7 @@ const createStyles = (theme) => StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12,
   },
-  title:        { fontSize: 24, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
+  title:        { fontSize: 22, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
   headerIcons:  { flexDirection: 'row', gap: 8 },
   iconBtn: {
     width: 38, height: 38, borderRadius: 12,

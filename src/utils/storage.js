@@ -24,7 +24,8 @@ const getDefaultData = () => ({
     { id: '5', name: 'Transport',  icon: '🚗' },
     { id: '6', name: 'Bills',      icon: '💡' },
     { id: '7', name: 'Entertainment', icon: '🎬' },
-    { id: '8', name: 'Others',     icon: '📦' },
+    { id: '9', name: 'Electronics',   icon: '💻' },
+    { id: '8', name: 'Others',        icon: '📦' },
   ],
   expenses: [],
 });
@@ -43,6 +44,12 @@ export const loadData = async () => {
     // Migrate: add Others if missing
     if (parsed.categories && !parsed.categories.find(c => c.name?.toLowerCase() === 'others')) {
       parsed.categories.push({ id: '8', name: 'Others', icon: '📦' });
+      await RNFS.writeFile(DATA_FILE_PATH, JSON.stringify(parsed), 'utf8');
+    }
+
+    // Migrate: add Electronics if missing
+    if (parsed.categories && !parsed.categories.find(c => c.name?.toLowerCase() === 'electronics')) {
+      parsed.categories.push({ id: '9', name: 'Electronics', icon: '💻' });
       await RNFS.writeFile(DATA_FILE_PATH, JSON.stringify(parsed), 'utf8');
     }
 

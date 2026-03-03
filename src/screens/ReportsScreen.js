@@ -121,6 +121,25 @@ const ReportsScreen = () => {
       .sort((a, b) => b.total - a.total);
   }, [filtered, data]);
 
+  // Payment method breakdown — UPI / Card / Cash + named methods
+  const paymentChartData = useMemo(() => {
+    const totals = {};
+    filtered.forEach(exp => {
+      // Top-level type: upi / card / cash
+      const type = exp.paymentType ?? 'cash';
+      // Named method if available
+      const method = exp.paymentMethodId && exp.paymentMethodId !== 'cash'
+        ? data?.paymentMethods?.find(m => m.id === exp.paymentMethodId)
+        : null;
+      const key   = method ? method.id   : type;
+      const label = method ? method.name : type === 'upi' ? 'UPI' : type === 'card' ? 'Card' : 'Cash';
+      const icon  = method ? (method.icon ?? '💳') : type === 'upi' ? '📲' : type === 'card' ? '💳' : '💵';
+      if (!totals[key]) totals[key] = { id: key, name: label, icon, total: 0 };
+      totals[key].total += parseFloat(exp.amount);
+    });
+    return Object.values(totals).sort((a, b) => b.total - a.total);
+  }, [filtered, data]);
+
   // X-axis ticks for horizontal chart (amount axis)
   const catMax    = Math.max(...categoryChartData.map(d => d.total), 0);
   const xTicks    = getNiceTicks(catMax, 4);   // 0, 25K, 50K … etc
@@ -459,6 +478,37 @@ const ReportsScreen = () => {
           </View>
         )}
 
+        {/* ── Payment Method breakdown ── */}
+        {paymentChartData.length > 0 && (
+          <>
+            <Text style={styles.breakdownTitle}>Payment Method Breakdown</Text>
+            <View style={styles.catList}>
+              {paymentChartData.map((item, idx) => {
+                const PM_COLORS = ['#6366F1','#F59E0B','#10B981','#EF4444','#8B5CF6','#EC4899','#14B8A6'];
+                const color = PM_COLORS[idx % PM_COLORS.length];
+                const pct   = filteredTotal > 0 ? (item.total / filteredTotal) * 100 : 0;
+                return (
+                  <View key={item.id} style={styles.catRow}>
+                    <View style={[styles.catIconBox, { backgroundColor: `${color}22` }]}>
+                      <Text style={styles.catIcon}>{item.icon}</Text>
+                    </View>
+                    <View style={styles.catInfo}>
+                      <View style={styles.catTopRow}>
+                        <Text style={styles.catName}>{item.name}</Text>
+                        <Text style={styles.catAmount}>₹{item.total.toLocaleString('en-IN')}</Text>
+                      </View>
+                      <View style={styles.catBarTrack}>
+                        <View style={[styles.catBarFill, { width: `${pct}%`, backgroundColor: color }]} />
+                      </View>
+                      <Text style={styles.catPct}>{pct.toFixed(1)}% of period</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -473,7 +523,7 @@ const createStyles = (theme) => StyleSheet.create({
   loadingText:   { fontSize: 16, color: theme.textPrimary, fontWeight: '600' },
 
   header:   { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 2 },
-  title:    { fontSize: 24, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
+  title:    { fontSize: 22, fontWeight: '700', color: theme.textPrimary, letterSpacing: -0.5 },
   subtitle: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
 
   presetRow:        { paddingHorizontal: 20, paddingVertical: 12, gap: 8 },
