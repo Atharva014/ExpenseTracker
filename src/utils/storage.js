@@ -1,5 +1,23 @@
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PermissionsAndroid, Platform } from 'react-native';
+
+const requestStoragePermission = async () => {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const sdkVersion = parseInt(Platform.Version, 10);
+    if (sdkVersion >= 33) return true; // Android 13+ uses scoped storage
+    const readGranted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+      { title: 'Storage Permission', message: 'App needs storage access for backups.', buttonPositive: 'Allow' }
+    );
+    const writeGranted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+      { title: 'Storage Permission', message: 'App needs storage access to save backups.', buttonPositive: 'Allow' }
+    );
+    return readGranted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch (e) { return false; }
+};
 
 const DATA_FILE_PATH = `${RNFS.DocumentDirectoryPath}/expense_data.json`;
 
@@ -18,7 +36,7 @@ const getDefaultData = () => ({
   ],
   categories: [
     { id: '1', name: 'Healthcare', icon: '🏥' },
-    { id: '2', name: 'Food',       icon: '🍕' },
+    { id: '2', name: 'Food',       icon: '🍽️' },
     { id: '3', name: 'Grocery',    icon: '🛒' },
     { id: '4', name: 'Shopping',   icon: '🛍️' },
     { id: '5', name: 'Transport',  icon: '🚗' },
@@ -47,6 +65,9 @@ export const loadData = async () => {
       await RNFS.writeFile(DATA_FILE_PATH, JSON.stringify(parsed), 'utf8');
     }
 
+    // Migrate: update Food icon
+    const foodCat = parsed.categories.find(c => c.id === '2');
+    if (foodCat && foodCat.icon === '🍕') foodCat.icon = '🍽️';
     // Migrate: add Electronics if missing
     if (parsed.categories && !parsed.categories.find(c => c.name?.toLowerCase() === 'electronics')) {
       parsed.categories.push({ id: '9', name: 'Electronics', icon: '💻' });
@@ -260,8 +281,10 @@ export const getPaymentMethods = async () => {
 
 export const exportBackup = async () => {
   try {
+    await requestStoragePermission();
     const data = await loadData();
     const backupFileName = `expense_backup_${Date.now()}.json`;
+    // Save to Downloads folder - works on all Android versions
     const backupPath = `${RNFS.DownloadDirectoryPath}/${backupFileName}`;
     await RNFS.writeFile(backupPath, JSON.stringify(data, null, 2), 'utf8');
     return backupPath;
@@ -273,9 +296,23 @@ export const exportBackup = async () => {
 
 export const importBackup = async (filePath) => {
   try {
+    await requestStoragePermission();
     const fileContent = await RNFS.readFile(filePath, 'utf8');
-    const data = JSON.parse(fileContent);
-    await saveData(data);
+    const imported = JSON.parse(fileContent);
+    // Validate it's a valid backup
+    if (!imported.expenses || !imported.categories) return false;
+    // Restore everything: expenses, categories, paymentMethods, settings, income
+    const current = await loadData();
+    const merged = {
+      ...current,
+      expenses:       imported.expenses       ?? current.expenses,
+      categories:     imported.categories     ?? current.categories,
+      paymentMethods: imported.paymentMethods ?? current.paymentMethods,
+      settings:       imported.settings       ?? current.settings,
+      monthlyIncome:  imported.monthlyIncome  ?? current.monthlyIncome,
+      lastUpdated:    imported.lastUpdated     ?? current.lastUpdated,
+    };
+    await saveData(merged);
     return true;
   } catch (error) {
     console.error('Error importing backup:', error);

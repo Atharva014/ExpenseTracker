@@ -267,12 +267,12 @@ const SettingsScreen = () => {
                   { label: 'OK', onPress: closeDialog },
                 ]);
               } else {
-                showDialog('Error', 'Failed to import. Make sure the path is correct and the file is a valid ExpenseTracker backup.', [
+                showDialog('Error', 'Failed to import. Make sure the file is a valid ExpenseTracker backup.', [
                   { label: 'OK', onPress: closeDialog },
                 ]);
               }
             } catch (e) {
-              showDialog('Error', 'Import failed. The file may be corrupted or path is wrong.', [{ label: 'OK', onPress: closeDialog }]);
+              showDialog('Error', 'Import failed. The file may be corrupted.', [{ label: 'OK', onPress: closeDialog }]);
             }
           },
         },

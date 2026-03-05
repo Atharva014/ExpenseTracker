@@ -79,6 +79,7 @@ const HistoryScreen = () => {
   const [selectedPeriod, setSelectedPeriod]     = useState('All');
   const [selectedCats, setSelectedCats]         = useState([]);
   const [selectedPaymentIds, setSelectedPaymentIds] = useState([]); // new: payment method filter
+  const [selectedPayTypes, setSelectedPayTypes]     = useState([]); // cash/upi/card
   const [customFrom, setCustomFrom]             = useState('');     // new: custom date range
   const [customTo, setCustomTo]                 = useState('');     // new
   const [showAddedMoney, setShowAddedMoney]     = useState(false);  // show income/topup transactions
@@ -248,6 +249,10 @@ const HistoryScreen = () => {
       }
     }
 
+    // Pay type filter (cash/upi/card)
+    if (selectedPayTypes.length > 0) {
+      filtered = filtered.filter(e => selectedPayTypes.includes(e.paymentType ?? 'cash'));
+    }
     // Category and payment filters only apply to expense view
     if (!showAddedMoney) {
       if (selectedCats.length > 0) filtered = filtered.filter(e => selectedCats.includes(e.categoryId));
@@ -277,10 +282,11 @@ const HistoryScreen = () => {
     return cats;
   }, [data]);
 
+  const togglePayType  = (id) => setSelectedPayTypes(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
   const toggleCat      = (id) => setSelectedCats(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   const togglePayment  = (id) => setSelectedPaymentIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
-  const clearFilters   = () => { setSelectedPeriod('All'); setSelectedCats([]); setSelectedPaymentIds([]); setCustomFrom(''); setCustomTo(''); setShowAddedMoney(false); };
-  const activeFilters  = selectedPeriod !== 'All' || selectedCats.length > 0 || selectedPaymentIds.length > 0 || showAddedMoney;
+  const clearFilters   = () => { setSelectedPeriod('All'); setSelectedCats([]); setSelectedPaymentIds([]); setSelectedPayTypes([]); setCustomFrom(''); setCustomTo(''); setShowAddedMoney(false); };
+  const activeFilters  = selectedPeriod !== 'All' || selectedCats.length > 0 || selectedPaymentIds.length > 0 || selectedPayTypes.length > 0 || showAddedMoney;
 
   const fmtDate = (iso) => {
     const d = new Date(iso);
@@ -291,6 +297,25 @@ const HistoryScreen = () => {
   const renderExpenseRow = (expense, isLast) => {
     const isIncome = expense.type === 'income';
     const cat      = isIncome ? null : data.categories?.find(c => c.id === expense.categoryId);
+
+    // Payment label
+    const getPaymentLabel = () => {
+      if (isIncome) return null;
+      const type = expense.paymentType ?? 'cash';
+      if (type === 'cash') return 'Cash';
+      if (type === 'upi') {
+        const app = expense.upiApp && expense.upiApp !== 'other' ? expense.upiApp : null;
+        const appName = app ? app.charAt(0).toUpperCase() + app.slice(1) : null;
+        return appName ? `UPI - ${appName}` : 'UPI';
+      }
+      if (type === 'card' || type === 'bank') {
+        const pm = data.paymentMethods?.find(m => m.id === expense.paymentMethodId);
+        return pm ? `Card - ${pm.name}` : 'Card';
+      }
+      return 'Cash';
+    };
+    const payLabel = getPaymentLabel();
+
     return (
       <View key={expense.id}>
         <TouchableOpacity
@@ -305,10 +330,17 @@ const HistoryScreen = () => {
           <View style={styles.txInfo}>
             <Text style={styles.txName} numberOfLines={1}>{expense.description}</Text>
             <Text style={styles.txDate}>{fmtDate(expense.date)}</Text>
-            <View style={[styles.txTag, isIncome && { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
-              <Text style={[styles.txTagText, isIncome && { color: '#10B981' }]}>
-                {isIncome ? 'Income' : (cat?.name ?? 'Other')}
-              </Text>
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              <View style={[styles.txTag, isIncome && { backgroundColor: 'rgba(16,185,129,0.15)' }]}>
+                <Text style={[styles.txTagText, isIncome && { color: '#10B981' }]}>
+                  {isIncome ? 'Income' : (cat?.name ?? 'Other')}
+                </Text>
+              </View>
+              {payLabel && (
+                <View style={styles.txTag}>
+                  <Text style={styles.txTagText}>{payLabel}</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.txRight}>
@@ -722,6 +754,25 @@ const HistoryScreen = () => {
                       >
                         <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
                           {cat.icon}  {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.filterSection}>PAY VIA</Text>
+                <View style={styles.filterChips}>
+                  {PAYMENT_TYPES.map(pt => {
+                    const active = selectedPayTypes.includes(pt.id);
+                    return (
+                      <TouchableOpacity
+                        key={pt.id}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                        onPress={() => togglePayType(pt.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                          {pt.icon}  {pt.label}
                         </Text>
                       </TouchableOpacity>
                     );
